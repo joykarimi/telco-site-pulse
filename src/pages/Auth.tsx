@@ -14,7 +14,7 @@ export default function Auth() {
   const [signInForm, setSignInForm] = useState({ email: '', password: '' });
   const [signUpForm, setSignUpForm] = useState({ email: '', password: '', fullName: '' });
   
-  const { user, signIn, signUp } = useAuth();
+  const { user, signIn, signUp, fetchUserRole } = useAuth();
   const { toast } = useToast();
 
   // Redirect if already authenticated
@@ -28,15 +28,14 @@ export default function Auth() {
     
     const { error } = await signIn(signInForm.email, signInForm.password);
     
+    
     if (error) {
       toast({
         title: 'Sign In Failed',
         description: error.message,
         variant: 'destructive',
       });
-    } else {
-      toast({
-        title: 'Welcome back!',
+    } else { toast({ title: 'Welcome back!',
         description: 'You have been signed in successfully.',
       });
     }
@@ -58,7 +57,7 @@ export default function Auth() {
       });
     } else {
       toast({
-        title: 'Account Created!',
+        title: 'Account Created',
         description: 'Please check your email to verify your account.',
       });
     }

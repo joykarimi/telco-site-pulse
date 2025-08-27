@@ -15,3 +15,81 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
   }
 });
+
+export const createAsset = async (assetData: Partial<Database['public']['Tables']['assets']['Insert']>) => {
+  const { data, error } = await supabase
+    .from('assets')
+    .insert([assetData]);
+  if (error) throw error;
+  return data;
+};
+
+export const getAssets = async (siteId?: string) => {
+  let query = supabase
+    .from('assets')
+    .select('*');
+
+  if (siteId) {
+    query = query.eq('current_site_id', siteId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+};
+
+export const updateAsset = async (id: string, updates: Partial<Database['public']['Tables']['assets']['Update']>) => {
+  const { data, error } = await supabase
+    .from('assets')
+    .update(updates)
+    .eq('id', id);
+  if (error) throw error;
+  return data;
+};
+
+export const deleteAsset = async (id: string) => {
+  const { data, error } = await supabase
+    .from('assets')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+  return data;
+};
+
+export const createAssetMovement = async (movementData: Partial<Database['public']['Tables']['asset_movements']['Insert']>) => {
+  const { data, error } = await supabase
+    .from('asset_movements')
+    .insert([movementData]);
+  if (error) throw error;
+  return data;
+};
+
+export const getAssetMovements = async () => {
+  const { data, error } = await supabase
+    .from('asset_movements')
+    .select('*, assets(*), from_site:sites!asset_movements_from_site_id_fkey(*), to_site:sites!asset_movements_to_site_id_fkey(*)')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+};
+
+export const updateAssetMovementStatus = async (id: string, status: Database['public']['Enums']['movement_status']) => {
+  const { data, error } = await supabase
+    .from('asset_movements')
+    .update({ status })
+    .eq('id', id);
+  if (error) throw error;
+  return data;
+};
+
+export const getAuditLogs = async () => {
+  const { data, error } = await supabase
+    .from('audit_logs')
+    .select('*')
+    .order('timestamp', { ascending: false });
+  if (error) throw error;
+  return data;
+};
+
+// Update existing site functions to include revenue_type
+// (Assuming existing site functions like getSites, createSite, updateSite exist and modifying them)

@@ -1,4 +1,4 @@
-import { Building2, LogOut, User } from 'lucide-react';
+import { Building2, Layers, Move, PieChart, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/hooks/use-auth';
+import { Link } from 'react-router-dom';
 
 interface HeaderProps {
   sitesCount: number;
@@ -48,6 +49,27 @@ export function Header({ sitesCount }: HeaderProps) {
       </div>
       
       <div className="flex items-center gap-4">
+        {/* Navigation Links for New Features */}
+        <div className="flex items-center gap-4 text-sm">
+          <Link to="/assets" className="text-muted-foreground hover:text-primary">
+            <Layers className="mr-1 h-4 w-4 inline" />
+            Assets
+          </Link>
+          <Link to="/revenue-breakdown" className="text-muted-foreground hover:text-primary">
+            <PieChart className="mr-1 h-4 w-4 inline" />
+            Revenue Breakdown
+          </Link>
+          {(profile?.role === 'maintenance_manager' || profile?.role === 'operations_manager' || profile?.role === 'admin') && (
+            <Link to="/asset-movement-requests" className="text-muted-foreground hover:text-primary">
+              <Move className="mr-1 h-4 w-4 inline" />
+              Asset Movements
+            </Link>
+          )}
+        </div>
+
+        {/* Separator */}
+        <div className="w-px h-6 bg-gray-300"></div>
+
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Building2 className="h-4 w-4" />
           {sitesCount} Sites Active

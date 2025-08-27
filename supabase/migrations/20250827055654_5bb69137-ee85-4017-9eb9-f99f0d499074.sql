@@ -16,19 +16,6 @@ CREATE TYPE public.revenue_type AS ENUM ('colocated', 'safaricom_only', 'airtel_
 -- Update sites table to include revenue type
 ALTER TABLE public.sites ADD COLUMN revenue_type public.revenue_type NOT NULL DEFAULT 'colocated';
 
--- Create profiles table for user management
-CREATE TABLE public.profiles (
-  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name TEXT NOT NULL,
-  role public.user_role NOT NULL DEFAULT 'user',
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-);
-
--- Enable RLS on profiles
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
 -- Create assets table
 CREATE TABLE public.assets (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -81,6 +68,19 @@ CREATE TABLE public.audit_logs (
 
 -- Enable RLS on audit logs
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Create profiles table for user management
+CREATE TABLE public.profiles (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  role public.user_role NOT NULL DEFAULT 'user',
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+-- Enable RLS on profiles
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- Create function to check user role
 CREATE OR REPLACE FUNCTION public.get_user_role(user_uuid UUID)
