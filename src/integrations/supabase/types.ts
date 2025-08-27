@@ -14,6 +14,159 @@ export type Database = {
   }
   public: {
     Tables: {
+      asset_movements: {
+        Row: {
+          approved_at: string | null
+          asset_id: string
+          created_at: string
+          from_site_id: string | null
+          id: string
+          maintenance_approved_by: string | null
+          maintenance_manager_approval: boolean | null
+          operations_approved_by: string | null
+          operations_manager_approval: boolean | null
+          reason: string | null
+          rejected_at: string | null
+          requested_by: string
+          status: Database["public"]["Enums"]["movement_status"]
+          to_site_id: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          asset_id: string
+          created_at?: string
+          from_site_id?: string | null
+          id?: string
+          maintenance_approved_by?: string | null
+          maintenance_manager_approval?: boolean | null
+          operations_approved_by?: string | null
+          operations_manager_approval?: boolean | null
+          reason?: string | null
+          rejected_at?: string | null
+          requested_by: string
+          status?: Database["public"]["Enums"]["movement_status"]
+          to_site_id: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          asset_id?: string
+          created_at?: string
+          from_site_id?: string | null
+          id?: string
+          maintenance_approved_by?: string | null
+          maintenance_manager_approval?: boolean | null
+          operations_approved_by?: string | null
+          operations_manager_approval?: boolean | null
+          reason?: string | null
+          rejected_at?: string | null
+          requested_by?: string
+          status?: Database["public"]["Enums"]["movement_status"]
+          to_site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_movements_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_movements_from_site_id_fkey"
+            columns: ["from_site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_movements_to_site_id_fkey"
+            columns: ["to_site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assets: {
+        Row: {
+          asset_type: Database["public"]["Enums"]["asset_type"]
+          created_at: string
+          current_site_id: string | null
+          id: string
+          installation_date: string | null
+          purchase_date: string | null
+          serial_number: string
+          status: Database["public"]["Enums"]["asset_status"]
+          updated_at: string
+        }
+        Insert: {
+          asset_type: Database["public"]["Enums"]["asset_type"]
+          created_at?: string
+          current_site_id?: string | null
+          id?: string
+          installation_date?: string | null
+          purchase_date?: string | null
+          serial_number: string
+          status?: Database["public"]["Enums"]["asset_status"]
+          updated_at?: string
+        }
+        Update: {
+          asset_type?: Database["public"]["Enums"]["asset_type"]
+          created_at?: string
+          current_site_id?: string | null
+          id?: string
+          installation_date?: string | null
+          purchase_date?: string | null
+          serial_number?: string
+          status?: Database["public"]["Enums"]["asset_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_current_site_id_fkey"
+            columns: ["current_site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string | null
+          table_name: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       monthly_data: {
         Row: {
           airtel_revenue: number
@@ -64,11 +217,39 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name: string
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       sites: {
         Row: {
           created_at: string
           id: string
           location: string
+          revenue_type: Database["public"]["Enums"]["revenue_type"]
           site_id: string
           site_type: Database["public"]["Enums"]["site_type"]
           updated_at: string
@@ -77,6 +258,7 @@ export type Database = {
           created_at?: string
           id?: string
           location: string
+          revenue_type?: Database["public"]["Enums"]["revenue_type"]
           site_id: string
           site_type: Database["public"]["Enums"]["site_type"]
           updated_at?: string
@@ -85,6 +267,7 @@ export type Database = {
           created_at?: string
           id?: string
           location?: string
+          revenue_type?: Database["public"]["Enums"]["revenue_type"]
           site_id?: string
           site_type?: Database["public"]["Enums"]["site_type"]
           updated_at?: string
@@ -96,9 +279,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { user_uuid: string }
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
     }
     Enums: {
+      asset_status: "active" | "in_repair" | "retired"
+      asset_type:
+        | "generator"
+        | "solar_panel"
+        | "battery"
+        | "aps_board"
+        | "router"
+        | "rectifier"
+        | "electronic_lock"
+      movement_status: "pending" | "approved" | "rejected"
+      revenue_type: "colocated" | "safaricom_only" | "airtel_only"
       site_type:
         | "Grid Only"
         | "Grid + Generator"
@@ -107,6 +304,7 @@ export type Database = {
         | "Generator + Solar"
         | "Gen Only"
         | "Solar Only"
+      user_role: "admin" | "maintenance_manager" | "operations_manager" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -234,6 +432,18 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      asset_status: ["active", "in_repair", "retired"],
+      asset_type: [
+        "generator",
+        "solar_panel",
+        "battery",
+        "aps_board",
+        "router",
+        "rectifier",
+        "electronic_lock",
+      ],
+      movement_status: ["pending", "approved", "rejected"],
+      revenue_type: ["colocated", "safaricom_only", "airtel_only"],
       site_type: [
         "Grid Only",
         "Grid + Generator",
@@ -243,6 +453,7 @@ export const Constants = {
         "Gen Only",
         "Solar Only",
       ],
+      user_role: ["admin", "maintenance_manager", "operations_manager", "user"],
     },
   },
 } as const
