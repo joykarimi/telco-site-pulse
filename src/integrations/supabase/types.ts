@@ -217,6 +217,42 @@ export type Database = {
           },
         ]
       }
+      pending_users: {
+        Row: {
+          created_at: string
+          created_by: string
+          email: string
+          expires_at: string
+          full_name: string
+          id: string
+          is_activated: boolean
+          role: Database["public"]["Enums"]["user_role"]
+          temporary_password: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          email: string
+          expires_at?: string
+          full_name: string
+          id?: string
+          is_activated?: boolean
+          role?: Database["public"]["Enums"]["user_role"]
+          temporary_password: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          email?: string
+          expires_at?: string
+          full_name?: string
+          id?: string
+          is_activated?: boolean
+          role?: Database["public"]["Enums"]["user_role"]
+          temporary_password?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -279,6 +315,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_temp_password: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_user_role: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
