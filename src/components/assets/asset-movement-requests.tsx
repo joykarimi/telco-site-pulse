@@ -1,390 +1,231 @@
-import { useState } from 'react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Asset, AssetMovement, MovementStatus } from '@/types/database';
-import { Site } from '@/types/site';
-import { useAuth } from '@/hooks/use-auth';
-import { 
-  MoveRight, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle,
-  Plus,
-  Eye,
-  Calendar,
-  User,
-  MapPin
-} from 'lucide-react';
-import { format } from 'date-fns';
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import { Clock, CheckCircle, XCircle, Package, ArrowRight } from "lucide-react";
 
-interface AssetMovementRequestsProps {
-  movements: AssetMovement[];
-  assets: Asset[];
-  sites: Site[];
-  onRequestMovement: (assetId: string, toSiteId: string, reason?: string) => void;
-  onApproveMovement: (movementId: string, role: 'maintenance' | 'operations') => void;
-  onRejectMovement: (movementId: string, reason: string) => void;
+interface AssetMovementRequest {
+  id: string;
+  asset_id: string;
+  from_site_id?: string;
+  to_site_id: string;
+  requested_by: string;
+  status: 'pending' | 'approved' | 'rejected';
+  maintenance_manager_approval?: boolean;
+  operations_manager_approval?: boolean;
+  reason?: string;
+  created_at: string;
+  assets?: {
+    serial_number: string;
+    asset_type: string;
+  };
+  from_site?: {
+    site_id: string;
+    location: string;
+  };
+  to_site?: {
+    site_id: string;
+    location: string;
+  };
+  requesting_user?: {
+    full_name: string;
+  };
 }
 
-export function AssetMovementRequests({ 
-  movements, 
-  assets, 
-  sites, 
-  onRequestMovement,
-  onApproveMovement,
-  onRejectMovement
-}: AssetMovementRequestsProps) {
+const statusColors = {
+  pending: "default",
+  approved: "default", 
+  rejected: "destructive",
+} as const;
+
+const statusIcons = {
+  pending: Clock,
+  approved: CheckCircle,
+  rejected: XCircle,
+};
+
+export function AssetMovementRequests() {
+  const [requests, setRequests] = useState<AssetMovementRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
-  const [selectedAsset, setSelectedAsset] = useState<string>('');
-  const [selectedSite, setSelectedSite] = useState<string>('');
-  const [reason, setReason] = useState<string>('');
-  const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
-  const [selectedMovement, setSelectedMovement] = useState<AssetMovement | null>(null);
+  const { toast } = useToast();
 
-  const getStatusBadge = (status: MovementStatus) => {
-    const statusConfig = {
-      pending: {
-        variant: 'secondary' as const,
-        icon: Clock,
-        className: 'animate-pulse bg-gradient-warning text-warning-foreground',
-      },
-      approved: {
-        variant: 'default' as const,
-        icon: CheckCircle,
-        className: 'bg-gradient-success text-success-foreground animate-bounce-in',
-      },
-      rejected: {
-        variant: 'destructive' as const,
-        icon: XCircle,
-        className: 'bg-gradient-danger text-destructive-foreground',
-      },
-    };
+  const isAdmin = profile?.role === 'admin';
+  const isManager = profile?.role === 'maintenance_manager' || profile?.role === 'operations_manager';
 
-    const config = statusConfig[status];
-    const Icon = config.icon;
+  useEffect(() => {
+    fetchRequests();
+  }, []);
 
-    return (
-      <Badge variant={config.variant} className={`${config.className} gap-1 transition-all duration-300`}>
-        <Icon className="h-3 w-3" />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    );
-  };
+  const fetchRequests = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('asset_movements')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-  const getAssetName = (assetId: string) => {
-    const asset = assets.find(a => a.id === assetId);
-    return asset ? `${asset.asset_type.replace('_', ' ')} - ${asset.serial_number}` : 'Unknown Asset';
-  };
-
-  const getSiteName = (siteId?: string) => {
-    if (!siteId) return 'Unassigned';
-    const site = sites.find(s => s.id === siteId);
-    return site?.name || 'Unknown Site';
-  };
-
-  const canApprove = (movement: AssetMovement) => {
-    if (!profile) return false;
-    
-    const isMaintenance = profile.role === 'maintenance_manager' || profile.role === 'admin';
-    const isOperations = profile.role === 'operations_manager' || profile.role === 'admin';
-    
-    if (movement.status !== 'pending') return false;
-    
-    if (isMaintenance && !movement.maintenance_manager_approval) return true;
-    if (isOperations && !movement.operations_manager_approval) return true;
-    
-    return false;
-  };
-
-  const handleRequestSubmit = () => {
-    if (selectedAsset && selectedSite) {
-      onRequestMovement(selectedAsset, selectedSite, reason || undefined);
-      setSelectedAsset('');
-      setSelectedSite('');
-      setReason('');
-      setIsRequestDialogOpen(false);
+      if (error) throw error;
+      setRequests(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch movement requests",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const pendingCount = movements.filter(m => m.status === 'pending').length;
-  const approvedCount = movements.filter(m => m.status === 'approved').length;
-  const rejectedCount = movements.filter(m => m.status === 'rejected').length;
+  const handleApproval = async (requestId: string, approve: boolean) => {
+    try {
+      const updateData: any = {};
+      
+      if (profile?.role === 'maintenance_manager') {
+        updateData.maintenance_manager_approval = approve;
+        updateData.maintenance_approved_by = profile.user_id;
+      } else if (profile?.role === 'operations_manager') {
+        updateData.operations_manager_approval = approve;
+        updateData.operations_approved_by = profile.user_id;
+      } else if (profile?.role === 'admin') {
+        updateData.maintenance_manager_approval = approve;
+        updateData.operations_manager_approval = approve;
+        updateData.maintenance_approved_by = profile.user_id;
+        updateData.operations_approved_by = profile.user_id;
+      }
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-card hover:shadow-custom-hover transition-all duration-300 animate-scale-in">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Requests</CardTitle>
-            <MoveRight className="h-4 w-4 text-primary animate-float" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{movements.length}</div>
-          </CardContent>
-        </Card>
+      if (approve) {
+        updateData.approved_at = new Date().toISOString();
+        updateData.status = 'approved';
+      } else {
+        updateData.rejected_at = new Date().toISOString();
+        updateData.status = 'rejected';
+      }
 
-        <Card className="bg-gradient-warning hover:shadow-custom-warning transition-all duration-300 animate-scale-in">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-warning-foreground">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-warning-foreground animate-pulse" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-warning-foreground">{pendingCount}</div>
-          </CardContent>
-        </Card>
+      const { error } = await supabase
+        .from('asset_movements')
+        .update(updateData)
+        .eq('id', requestId);
 
-        <Card className="bg-gradient-success hover:shadow-custom-success transition-all duration-300 animate-scale-in">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-success-foreground">Approved</CardTitle>
-            <CheckCircle className="h-4 w-4 text-success-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success-foreground">{approvedCount}</div>
-          </CardContent>
-        </Card>
+      if (error) throw error;
 
-        <Card className="bg-gradient-danger hover:shadow-custom-danger transition-all duration-300 animate-scale-in">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-destructive-foreground">Rejected</CardTitle>
-            <XCircle className="h-4 w-4 text-destructive-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive-foreground">{rejectedCount}</div>
-          </CardContent>
-        </Card>
-      </div>
+      toast({
+        title: "Success",
+        description: `Request ${approve ? 'approved' : 'rejected'} successfully`,
+      });
 
-      {/* Movement Requests Table */}
-      <Card className="animate-fade-in-up bg-gradient-card hover:shadow-custom-hover transition-all duration-300">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <MoveRight className="h-5 w-5 text-primary animate-float" />
-              Asset Movement Requests
-            </CardTitle>
-            <CardDescription>Track and manage asset transfers between sites</CardDescription>
-          </div>
-          
-          <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-gradient-primary hover:shadow-custom-hover transition-all duration-300">
-                <Plus className="mr-2 h-4 w-4" />
-                New Request
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[525px] animate-scale-in bg-gradient-card">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Plus className="h-5 w-5 text-primary" />
-                  Request Asset Movement
-                </DialogTitle>
-                <DialogDescription>
-                  Submit a request to move an asset to a different site
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="asset">Select Asset</Label>
-                  <Select value={selectedAsset} onValueChange={setSelectedAsset}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose an asset to move" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assets.filter(a => a.status === 'active').map((asset) => (
-                        <SelectItem key={asset.id} value={asset.id}>
-                          {asset.asset_type.replace('_', ' ')} - {asset.serial_number}
-                          {asset.current_site_id && ` (${getSiteName(asset.current_site_id)})`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+      fetchRequests();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update request",
+        variant: "destructive",
+      });
+    }
+  };
 
-                <div className="space-y-2">
-                  <Label htmlFor="site">Destination Site</Label>
-                  <Select value={selectedSite} onValueChange={setSelectedSite}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose destination site" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sites.map((site) => (
-                        <SelectItem key={site.id} value={site.id}>
-                          {site.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="reason">Reason (Optional)</Label>
-                  <Textarea
-                    id="reason"
-                    placeholder="Explain why this asset needs to be moved..."
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="resize-none"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsRequestDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handleRequestSubmit}
-                  disabled={!selectedAsset || !selectedSite}
-                  className="bg-gradient-primary hover:shadow-custom-hover transition-all duration-300"
-                >
-                  Submit Request
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border border-border/50 overflow-hidden">
-            <Table>
-              <TableHeader className="bg-muted/30">
-                <TableRow>
-                  <TableHead>Asset</TableHead>
-                  <TableHead>From → To</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Requested By</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Approvals</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movements.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                      <div className="flex flex-col items-center gap-2">
-                        <AlertTriangle className="h-8 w-8 text-muted-foreground/50" />
-                        No movement requests found
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  movements.map((movement, index) => (
-                    <TableRow 
-                      key={movement.id} 
-                      className="hover:bg-muted/50 transition-colors animate-fade-in-up"
-                      style={{ animationDelay: `${index * 100}ms` }}
-                    >
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col">
-                          <span>{getAssetName(movement.asset_id)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">
-                            {getSiteName(movement.from_site_id)}
-                          </span>
-                          <MoveRight className="h-4 w-4 text-primary animate-float" />
-                          <span className="text-sm font-medium">
-                            {getSiteName(movement.to_site_id)}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(movement.status)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">Requester</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">
-                            {format(new Date(movement.created_at), 'MMM dd, yyyy')}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-1">
-                            {movement.maintenance_manager_approval ? (
-                              <CheckCircle className="h-3 w-3 text-success" />
-                            ) : (
-                              <Clock className="h-3 w-3 text-warning" />
-                            )}
-                            <span className="text-xs">Maintenance</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {movement.operations_manager_approval ? (
-                              <CheckCircle className="h-3 w-3 text-success" />
-                            ) : (
-                              <Clock className="h-3 w-3 text-warning" />
-                            )}
-                            <span className="text-xs">Operations</span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          {canApprove(movement) && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => onApproveMovement(movement.id, 
-                                  profile?.role === 'maintenance_manager' ? 'maintenance' : 'operations'
-                                )}
-                                className="hover:bg-success hover:text-success-foreground transition-colors"
-                              >
-                                <CheckCircle className="mr-1 h-3 w-3" />
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => onRejectMovement(movement.id, 'Rejected by manager')}
-                                className="hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                              >
-                                <XCircle className="mr-1 h-3 w-3" />
-                                Reject
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setSelectedMovement(movement)}
-                          >
-                            <Eye className="mr-1 h-3 w-3" />
-                            View
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex justify-center p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </CardContent>
       </Card>
-    </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Package className="h-5 w-5 text-primary" />
+          Asset Movement Requests
+        </CardTitle>
+        <CardDescription>
+          Track and manage asset transfer requests between sites
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {requests.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">No movement requests found</p>
+        ) : (
+          <div className="space-y-4">
+            {requests.map((request) => {
+              const StatusIcon = statusIcons[request.status];
+              const canApprove = (isAdmin || isManager) && request.status === 'pending';
+              
+              return (
+                <div
+                  key={request.id}
+                  className="p-4 border border-accent/20 rounded-lg bg-gradient-to-r from-background to-accent/5 hover:shadow-md transition-all duration-300"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-2">
+                        <StatusIcon className="h-4 w-4" />
+                        <span className="font-medium">
+                          {request.assets?.serial_number} ({request.assets?.asset_type})
+                        </span>
+                        <Badge variant={statusColors[request.status]}>
+                          {request.status}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>
+                          {request.from_site 
+                            ? `${request.from_site.site_id} - ${request.from_site.location}`
+                            : 'No current site'
+                          }
+                        </span>
+                        <ArrowRight className="h-3 w-3" />
+                        <span>
+                          {request.to_site?.site_id} - {request.to_site?.location}
+                        </span>
+                      </div>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <p>Requested by: {request.requesting_user?.full_name}</p>
+                        {request.reason && <p>Reason: {request.reason}</p>}
+                        <p>Date: {new Date(request.created_at).toLocaleDateString()}</p>
+                        
+                        {request.status === 'pending' && (
+                          <div className="text-xs space-y-1">
+                            <p>Maintenance Manager: {request.maintenance_manager_approval ? '✅ Approved' : '⏳ Pending'}</p>
+                            <p>Operations Manager: {request.operations_manager_approval ? '✅ Approved' : '⏳ Pending'}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="text-right ml-4">
+                      {canApprove && (
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="default"
+                            onClick={() => handleApproval(request.id, true)}
+                          >
+                            Approve
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleApproval(request.id, false)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
