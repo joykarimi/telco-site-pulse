@@ -1,221 +1,229 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { Asset, AssetType, AssetStatus } from '@/types/database';
-import { Site } from '@/types/site';
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { AssetType, AssetStatus } from "@/types/database";
+import { Plus, Package } from "lucide-react";
 
-interface AssetFormProps {
-  sites: Site[];
-  onAddAsset: (asset: Omit<Asset, 'id' | 'created_at' | 'updated_at'>) => void;
+interface Site {
+  id: string;
+  site_id: string;
+  location: string;
 }
 
-export function AssetForm({ sites, onAddAsset }: AssetFormProps) {
+interface AssetFormProps {
+  onAssetCreated?: () => void;
+}
+
+const assetTypeLabels = {
+  generator: "Generator",
+  solar_panel: "Solar Panel",
+  battery: "Battery",
+  aps_board: "APS Board",
+  router: "Router",
+  rectifier: "Rectifier",
+  electronic_lock: "Electronic Lock",
+};
+
+const statusLabels = {
+  active: "Active",
+  in_repair: "In Repair",
+  retired: "Retired",
+};
+
+export function AssetForm({ onAssetCreated }: AssetFormProps) {
+  const [sites, setSites] = useState<Site[]>([]);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    serial_number: '',
-    asset_type: '' as AssetType,
-    purchase_date: undefined as Date | undefined,
-    installation_date: undefined as Date | undefined,
-    status: 'active' as AssetStatus,
-    current_site_id: '',
+    serial_number: "",
+    asset_type: "" as AssetType | "",
+    purchase_date: "",
+    installation_date: "",
+    status: "active" as AssetStatus,
+    current_site_id: "",
   });
+  const { toast } = useToast();
 
-  const assetTypes: { value: AssetType; label: string }[] = [
-    { value: 'generator', label: 'Generator' },
-    { value: 'solar_panel', label: 'Solar Panel' },
-    { value: 'battery', label: 'Battery' },
-    { value: 'aps_board', label: 'APS Board' },
-    { value: 'router', label: 'Router' },
-    { value: 'rectifier', label: 'Rectifier' },
-    { value: 'electronic_lock', label: 'Electronic Lock' },
-  ];
+  useEffect(() => {
+    fetchSites();
+  }, []);
 
-  const statusOptions: { value: AssetStatus; label: string }[] = [
-    { value: 'active', label: 'Active' },
-    { value: 'in_repair', label: 'In Repair' },
-    { value: 'retired', label: 'Retired' },
-  ];
+  const fetchSites = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('sites')
+        .select('id, site_id, location')
+        .order('site_id');
 
-  const handleSubmit = (e: React.FormEvent) => {
+      if (error) throw error;
+      setSites(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch sites",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.serial_number || !formData.asset_type) return;
-    
-    onAddAsset({
-      serial_number: formData.serial_number,
-      asset_type: formData.asset_type,
-      purchase_date: formData.purchase_date?.toISOString().split('T')[0],
-      installation_date: formData.installation_date?.toISOString().split('T')[0],
-      status: formData.status,
-      current_site_id: formData.current_site_id || undefined,
-    });
+    if (!formData.serial_number || !formData.asset_type) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    // Reset form
-    setFormData({
-      serial_number: '',
-      asset_type: '' as AssetType,
-      purchase_date: undefined,
-      installation_date: undefined,
-      status: 'active',
-      current_site_id: '',
-    });
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('assets')
+        .insert({
+          serial_number: formData.serial_number,
+          asset_type: formData.asset_type as AssetType,
+          purchase_date: formData.purchase_date || null,
+          installation_date: formData.installation_date || null,
+          status: formData.status,
+          current_site_id: formData.current_site_id || null,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Asset created successfully",
+      });
+
+      setFormData({
+        serial_number: "",
+        asset_type: "",
+        purchase_date: "",
+        installation_date: "",
+        status: "active",
+        current_site_id: "",
+      });
+
+      onAssetCreated?.();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create asset",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Card>
+    <Card className="bg-gradient-to-r from-background/50 to-primary/5 border-primary/20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Plus className="h-5 w-5" />
+          <Package className="h-5 w-5 text-primary" />
           Add New Asset
         </CardTitle>
         <CardDescription>
-          Register a new asset in the system
+          Create a new asset record in the system
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="serial_number">Serial Number</Label>
+              <Label htmlFor="serial_number">Serial Number *</Label>
               <Input
                 id="serial_number"
                 placeholder="Enter serial number"
                 value={formData.serial_number}
-                onChange={(e) => setFormData(prev => ({ ...prev, serial_number: e.target.value }))}
+                onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
                 required
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="asset_type">Asset Type</Label>
-              <Select 
-                value={formData.asset_type} 
-                onValueChange={(value: AssetType) => setFormData(prev => ({ ...prev, asset_type: value }))}
+              <Label htmlFor="asset_type">Asset Type *</Label>
+              <Select
+                value={formData.asset_type}
+                onValueChange={(value: AssetType) => setFormData({ ...formData, asset_type: value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select asset type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {assetTypes.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
+                  {Object.entries(assetTypeLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
-              <Label>Purchase Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.purchase_date && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.purchase_date ? (
-                      format(formData.purchase_date, "PPP")
-                    ) : (
-                      <span>Pick a date</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={formData.purchase_date}
-                    onSelect={(date) => setFormData(prev => ({ ...prev, purchase_date: date }))}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
+              <Label htmlFor="purchase_date">Purchase Date</Label>
+              <Input
+                id="purchase_date"
+                type="date"
+                value={formData.purchase_date}
+                onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
+              />
             </div>
-
             <div className="space-y-2">
-              <Label>Installation Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.installation_date && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.installation_date ? (
-                      format(formData.installation_date, "PPP")
-                    ) : (
-                      <span>Pick a date</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={formData.installation_date}
-                    onSelect={(date) => setFormData(prev => ({ ...prev, installation_date: date }))}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
+              <Label htmlFor="installation_date">Installation Date</Label>
+              <Input
+                id="installation_date"
+                type="date"
+                value={formData.installation_date}
+                onChange={(e) => setFormData({ ...formData, installation_date: e.target.value })}
+              />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select 
-                value={formData.status} 
-                onValueChange={(value: AssetStatus) => setFormData(prev => ({ ...prev, status: value }))}
+              <Select
+                value={formData.status}
+                onValueChange={(value: AssetStatus) => setFormData({ ...formData, status: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {statusOptions.map((status) => (
-                    <SelectItem key={status.value} value={status.value}>
-                      {status.label}
+                  {Object.entries(statusLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="current_site_id">Current Site</Label>
-              <Select 
-                value={formData.current_site_id} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, current_site_id: value }))}
+              <Select
+                value={formData.current_site_id}
+                onValueChange={(value) => setFormData({ ...formData, current_site_id: value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select site (optional)" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">No site assigned</SelectItem>
                   {sites.map((site) => (
                     <SelectItem key={site.id} value={site.id}>
-                      {site.name}
+                      {site.site_id} - {site.location}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
-
-          <Button type="submit" className="w-full">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Asset
+          <Button type="submit" disabled={loading} className="w-full">
+            <Plus className="h-4 w-4 mr-2" />
+            {loading ? "Creating..." : "Create Asset"}
           </Button>
         </form>
       </CardContent>
