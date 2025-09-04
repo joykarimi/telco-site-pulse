@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Temporarily removed for routing
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 import { SitesTable } from "@/components/dashboard/sites-table";
@@ -10,13 +9,40 @@ import { AssetsTable } from "@/components/assets/assets-table";
 import { RevenueBreakdown } from "@/components/dashboard/revenue-breakdown";
 import { Header } from "@/components/layout/header";
 import { Site } from "@/types/site";
-import { Asset, AssetMovement } from "@/types/database";
 import { AssetMovementTable } from "@/components/assets/asset-movement-table";
 import { calculateCompanySummary } from "@/lib/calculations";
-import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth.tsx";
+import { db } from "@/integrations/firebase/client";
+import { collection, getDocs, addDoc, query, orderBy, Timestamp, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Building2, FileText, Settings, Package, BarChart3 } from "lucide-react";
+import NotFound from "./NotFound";
+import { Toaster } from "@/components/ui/toaster";
+
+// Type definitions moved here after removing src/types/database.ts
+export interface Asset {
+  id: string;
+  name: string;
+  serial_number: string;
+  type: string;
+  site_id: string;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+};
+
+export interface AssetMovement {
+  id: string;
+  asset_id: string;
+  from_site_id: string;
+  to_site_id: string;
+  requested_by: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: Timestamp;
+  // Denormalized or populated data for display
+  asset?: { name: string; serial_number: string };
+  from_site?: { name: string };
+  to_site?: { name: string };
+};
 
 const Index = () => {
   const [sites, setSites] = useState<Site[]>([
@@ -24,7 +50,6 @@ const Index = () => {
       id: "1",
       name: "Site-001-Nairobi",
       type: "grid-generator-solar",
-      revenueType: "colocated",
       safaricomIncome: 75000,
       airtelIncome: 45000,
       gridConsumption: 800,
@@ -38,7 +63,6 @@ const Index = () => {
       id: "2", 
       name: "Site-002-Mombasa",
       type: "grid-only",
-      revenueType: "colocated",
       safaricomIncome: 65000,
       airtelIncome: 40000,
       gridConsumption: 1200,
@@ -52,7 +76,6 @@ const Index = () => {
       id: "3",
       name: "Site-003-Kisumu", 
       type: "generator-solar",
-      revenueType: "safaricom_only",
       safaricomIncome: 55000,
       airtelIncome: 0,
       gridConsumption: 0,
@@ -76,15 +99,15 @@ const Index = () => {
 
   const handleAddAsset = async (assetData: Omit<Asset, 'id' | 'created_at' | 'updated_at'>) => {
     try {
-      const { data, error } = await supabase
-        .from('assets')
-        .insert([assetData])
-        .select()
-        .single();
+      const docRef = await addDoc(collection(db, 'assets'), {
+        ...assetData,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      });
+      
+      const newAsset = { ...assetData, id: docRef.id, created_at: Timestamp.now(), updated_at: Timestamp.now() };
+      setAssets([...assets, newAsset]);
 
-      if (error) throw error;
-
-      setAssets([...assets, data]);
       toast({
         title: 'Asset Added',
         description: 'Asset has been successfully registered.',
@@ -99,16 +122,35 @@ const Index = () => {
   };
 
   const handleRequestMovement = async (assetId: string, fromSiteId: string, toSiteId: string) => {
+    if (!profile) return;
     try {
-      const { data, error } = await supabase
-        .from('asset_movements')
-        .insert([{ asset_id: assetId, from_site_id: fromSiteId, to_site_id: toSiteId, requested_by: profile?.id, status: 'pending' }])
-        .select()
-        .single();
+      const docRef = await addDoc(collection(db, 'asset_movements'), {
+        asset_id: assetId,
+        from_site_id: fromSiteId,
+        to_site_id: toSiteId,
+        requested_by: profile.id,
+        status: 'pending',
+        created_at: serverTimestamp(),
+      });
 
-      if (error) throw error;
+      const fromSite = sites.find(s => s.id === fromSiteId);
+      const toSite = sites.find(s => s.id === toSiteId);
+      const movedAsset = assets.find(a => a.id === assetId);
 
-      setAssetMovements([...assetMovements, data]);
+      const newMovement: AssetMovement = {
+        id: docRef.id,
+        asset_id: assetId,
+        from_site_id: fromSiteId,
+        to_site_id: toSiteId,
+        requested_by: profile.id,
+        status: 'pending',
+        created_at: Timestamp.now(),
+        asset: movedAsset ? { name: movedAsset.name, serial_number: movedAsset.serial_number } : undefined,
+        from_site: fromSite ? { name: fromSite.name } : undefined,
+        to_site: toSite ? { name: toSite.name } : undefined
+      };
+      setAssetMovements([...assetMovements, newMovement]);
+
       toast({
         title: 'Movement Request Sent',
         description: 'Asset movement request has been submitted for approval.',
@@ -117,6 +159,7 @@ const Index = () => {
       toast({
         title: 'Error',
         description: error.message,
+        variant: 'destructive',
       });
     }
   };
@@ -127,17 +170,13 @@ const Index = () => {
 
   const companySummary = calculateCompanySummary(sites);
 
-  // Load assets from database
   useEffect(() => {
     const loadAssets = async () => {
       try {
-        const { data, error } = await supabase
-          .from('assets')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setAssets(data || []);
+        const q = query(collection(db, 'assets'), orderBy('created_at', 'desc'));
+        const querySnapshot = await getDocs(q);
+        const assetsData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Asset));
+        setAssets(assetsData);
       } catch (error: any) {
         console.error('Error loading assets:', error);
       }
@@ -146,36 +185,52 @@ const Index = () => {
     loadAssets();
   }, []);
 
-  // Load asset movements from database
   useEffect(() => {
     const loadAssetMovements = async () => {
       try {
-        const { data, error } = await supabase
-          .from('asset_movements')
-          .select('*, assets(name, serial_number), from_site:sites!asset_movements_from_site_id_fkey(name), to_site:sites!asset_movements_to_site_id_fkey(name)')
-          .order('created_at', { ascending: false });
+        const q = query(collection(db, 'asset_movements'), orderBy('created_at', 'desc'));
+        const querySnapshot = await getDocs(q);
+        
+        const movementsData = await Promise.all(querySnapshot.docs.map(async (docSnapshot) => {
+          const movement = { ...docSnapshot.data(), id: docSnapshot.id } as AssetMovement;
 
-        if (error) throw error;
-        setAssetMovements(data || []);
+          let assetData;
+          if (movement.asset_id) {
+              const assetDoc = await getDoc(doc(db, 'assets', movement.asset_id));
+              if (assetDoc.exists()) {
+                  const asset = assetDoc.data();
+                  assetData = { name: asset.name, serial_number: asset.serial_number };
+              }
+          }
+          
+          const fromSite = sites.find(s => s.id === movement.from_site_id);
+          const toSite = sites.find(s => s.id === movement.to_site_id);
+
+          return {
+              ...movement,
+              asset: assetData,
+              from_site: fromSite ? { name: fromSite.name } : undefined,
+              to_site: toSite ? { name: toSite.name } : undefined,
+          };
+        }));
+
+        setAssetMovements(movementsData);
       } catch (error: any) {
         console.error('Error loading asset movements:', error);
       }
     };
 
-    if (profile?.role === 'admin' || profile?.role === 'maintenance_manager' || profile?.role === 'operations_manager') {
+    if (canManageAssets) {
       loadAssetMovements();
     }
-  }, [profile?.role]);
+  }, [profile?.role, sites, canManageAssets]);
 
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-6 space-y-6">
-        {/* Header */}
         <Header sitesCount={sites.length} />
-        {/* Summary Cards */}
         <SummaryCards summary={companySummary} />
 
-        {/* Navigation Links */}
         <nav className="flex space-x-4 border-b pb-2">
           <Link to="/" className={`flex items-center gap-2 ${location.pathname === '/' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
             <FileText className="h-4 w-4" />
@@ -193,7 +248,7 @@ const Index = () => {
             <Package className="h-4 w-4" />
             Assets
           </Link>
-          {(profile?.role === 'admin' || profile?.role === 'maintenance_manager' || profile?.role === 'operations_manager') && (
+          {canManageAssets && (
             <Link to="/asset-movements" className={`flex items-center gap-2 ${location.pathname === '/asset-movements' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
               <FileText className="h-4 w-4" />
               Asset Movements
@@ -207,7 +262,6 @@ const Index = () => {
           )}
         </nav>
 
-        {/* Route Content */}
         <Routes>
           <Route path="/" element={
             <Card className="space-y-4">
@@ -242,7 +296,7 @@ const Index = () => {
               </Card>
             </div>
           } />
-          {(profile?.role === 'admin' || profile?.role === 'maintenance_manager' || profile?.role === 'operations_manager') && (
+          {canManageAssets && (
             <Route path="/asset-movements" element={
               <Card className="space-y-4">
                 <CardHeader><CardTitle>Asset Movement Requests</CardTitle></CardHeader>
@@ -255,10 +309,10 @@ const Index = () => {
               <SiteForm onAddSite={handleAddSite} />
             } />
           )}
-          {/* Add a catch-all for 404 */}
-          {/* <Route path="*" element={<NotFound />} /> */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
+      <Toaster />
     </div>
   );
 };

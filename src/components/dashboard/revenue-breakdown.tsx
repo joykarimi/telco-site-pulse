@@ -13,13 +13,22 @@ export function RevenueBreakdown({ sites }: RevenueBreakdownProps) {
   // Group sites by revenue type
   const revenueBreakdown = sites.reduce((acc, site) => {
     const calculations = calculateSiteProfitLoss(site);
-    const revenueType = site.type.includes('safaricom') && site.type.includes('airtel') 
-      ? 'colocated' 
-      : site.safaricomIncome > 0 && site.airtelIncome > 0 
-        ? 'colocated'
-        : site.safaricomIncome > 0 
-          ? 'safaricom_only' 
-          : 'airtel_only';
+    const hasSafaricom = site.safaricomIncome > 0;
+    const hasAirtel = site.airtelIncome > 0;
+
+    let revenueType: 'colocated' | 'safaricom_only' | 'airtel_only' | 'none' = 'none';
+
+    if (hasSafaricom && hasAirtel) {
+      revenueType = 'colocated';
+    } else if (hasSafaricom) {
+      revenueType = 'safaricom_only';
+    } else if (hasAirtel) {
+      revenueType = 'airtel_only';
+    }
+
+    if (revenueType === 'none') {
+      return acc;
+    }
 
     if (!acc[revenueType]) {
       acc[revenueType] = { count: 0, revenue: 0, profit: 0 };

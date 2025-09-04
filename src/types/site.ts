@@ -10,7 +10,6 @@ export interface Site {
   id: string;
   name: string;
   type: SiteType;
-  revenueType?: 'colocated' | 'safaricom_only' | 'airtel_only';
   
   // Earnings
   safaricomIncome: number;

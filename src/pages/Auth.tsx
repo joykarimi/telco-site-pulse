@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/use-auth.tsx';
 import { useToast } from '@/hooks/use-toast';
 import { Building2, Loader2 } from 'lucide-react';
 
@@ -14,7 +14,7 @@ export default function Auth() {
   const [signInForm, setSignInForm] = useState({ email: '', password: '' });
   const [signUpForm, setSignUpForm] = useState({ email: '', password: '', fullName: '' });
   
-  const { user, signIn, signUp, fetchUserRole } = useAuth();
+  const { user, login, signUp } = useAuth(); // Corrected to use login
   const { toast } = useToast();
 
   // Redirect if already authenticated
@@ -26,19 +26,7 @@ export default function Auth() {
     e.preventDefault();
     setIsLoading(true);
     
-    const { error } = await signIn(signInForm.email, signInForm.password);
-    
-    
-    if (error) {
-      toast({
-        title: 'Sign In Failed',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } else { toast({ title: 'Welcome back!',
-        description: 'You have been signed in successfully.',
-      });
-    }
+    await login(signInForm.email, signInForm.password); // Corrected to use login
     
     setIsLoading(false);
   };
@@ -47,20 +35,7 @@ export default function Auth() {
     e.preventDefault();
     setIsLoading(true);
     
-    const { error } = await signUp(signUpForm.email, signUpForm.password, signUpForm.fullName);
-    
-    if (error) {
-      toast({
-        title: 'Sign Up Failed',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } else {
-      toast({
-        title: 'Account Created',
-        description: 'Please check your email to verify your account.',
-      });
-    }
+    await signUp(signUpForm.email, signUpForm.password, signUpForm.fullName);
     
     setIsLoading(false);
   };
