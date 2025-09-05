@@ -1,0 +1,19 @@
+{
+  "projects": {
+    "default": "telco-site-pulse",
+    "telcoms": "telco-c0b89"
+  },
+  "targets": {
+    "telco-site-pulse": {
+      "hosting": {
+        "site-pulse": [
+          "/"
+        ]
+      }
+    }
+  },
+  "etags": {},
+  "functions": {
+    "source": "functions"
+  }
+}

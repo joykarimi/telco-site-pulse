@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from 'recharts';
-import { Site } from '@/types/site';
+import { Site } from '@/pages/Index';
 import { calculateSiteProfitLoss, formatCurrency } from '@/lib/calculations';
 import { TrendingUp, DollarSign, Building2, Target, Activity, Zap } from 'lucide-react';
 

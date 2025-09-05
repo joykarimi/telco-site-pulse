@@ -1,4 +1,4 @@
-import { Site, SiteCalculations, CompanySummary } from '@/types/site';
+import { Site, SiteCalculations, CompanySummary } from '../types/site';
 
 export function calculateSiteProfitLoss(site: Site): SiteCalculations {
   const totalRevenue = site.safaricomIncome + site.airtelIncome;
@@ -33,23 +33,30 @@ export function calculateSiteProfitLoss(site: Site): SiteCalculations {
 }
 
 export function calculateCompanySummary(sites: Site[]): CompanySummary {
-  const calculations = sites.map(calculateSiteProfitLoss);
-  
-  const totalRevenue = calculations.reduce((sum, calc) => sum + calc.totalRevenue, 0);
-  const totalExpense = calculations.reduce((sum, calc) => sum + calc.totalExpense, 0);
-  const netProfitLoss = totalRevenue - totalExpense;
-  
-  const profitableSites = calculations.filter(calc => calc.netProfitLoss > 0).length;
-  const lossMakingSites = calculations.filter(calc => calc.netProfitLoss < 0).length;
-  
-  return {
-    totalRevenue,
-    totalExpense,
-    netProfitLoss,
-    totalSites: sites.length,
-    profitableSites,
-    lossMakingSites,
-  };
+  const summary = sites.reduce(
+    (acc, site) => {
+      const calculations = calculateSiteProfitLoss(site);
+      acc.totalRevenue += calculations.totalRevenue;
+      acc.totalExpense += calculations.totalExpense;
+      if (calculations.netProfitLoss > 0) {
+        acc.profitableSites++;
+      } else if (calculations.netProfitLoss < 0) {
+        acc.lossMakingSites++;
+      }
+      return acc;
+    },
+    {
+      totalRevenue: 0,
+      totalExpense: 0,
+      netProfitLoss: 0,
+      totalSites: sites.length,
+      profitableSites: 0,
+      lossMakingSites: 0,
+    }
+  );
+
+  summary.netProfitLoss = summary.totalRevenue - summary.totalExpense;
+  return summary;
 }
 
 export function formatCurrency(amount: number): string {

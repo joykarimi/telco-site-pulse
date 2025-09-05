@@ -7,16 +7,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { UserRole } from "@/types/database";
+import { db } from "@/integrations/firebase/client";
+import { collection, getDocs } from "firebase/firestore";
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { UserPlus, Users, Shield, Settings, User } from "lucide-react";
+
+export type UserRole = "admin" | "maintenance_manager" | "operations_manager" | "user";
 
 interface UserProfile {
   id: string;
   user_id: string;
   full_name: string;
   role: UserRole;
-  created_at: string;
+  created_at: any; // Firestore timestamp
 }
 
 const roleIcons = {
@@ -40,6 +43,10 @@ const roleColors = {
   user: "outline",
 } as const;
 
+const functions = getFunctions();
+const createUserFn = httpsCallable(functions, 'createUser');
+const manageUserRoleFn = httpsCallable(functions, 'manageUserRole');
+
 export function UserManagement() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,13 +64,9 @@ export function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setUsers(data || []);
+      const querySnapshot = await getDocs(collection(db, 'profiles'));
+      const usersData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as UserProfile[];
+      setUsers(usersData);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -87,15 +90,11 @@ export function UserManagement() {
 
     setCreateUserLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-user', {
-        body: {
-          email: newUser.email,
-          fullName: newUser.fullName,
-          role: newUser.role,
-        },
+      await createUserFn({
+        email: newUser.email,
+        fullName: newUser.fullName,
+        role: newUser.role,
       });
-
-      if (error) throw error;
 
       toast({
         title: "Success",
@@ -117,11 +116,7 @@ export function UserManagement() {
 
   const updateUserRole = async (userId: string, role: UserRole) => {
     try {
-      const { data, error } = await supabase.functions.invoke('manage-user-role', {
-        body: { userId, role },
-      });
-
-      if (error) throw error;
+      await manageUserRoleFn({ userId, role });
 
       toast({
         title: "Success",
@@ -195,7 +190,7 @@ export function UserManagement() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
+            <Users className="h-5 w-5 text-.primary" />
             User Management
           </CardTitle>
           <CardDescription>
@@ -235,7 +230,7 @@ export function UserManagement() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {new Date(user.created_at).toLocaleDateString()}
+                        {new Date(user.created_at.toDate()).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">

@@ -1,0 +1,8 @@
+{
+    "passwordPolicy": {
+        "actionCodeSettings": {
+            "url": "https://telco-c0b89.web.app/auth/action",
+            "handleCodeInApp": true
+        }
+    }
+}

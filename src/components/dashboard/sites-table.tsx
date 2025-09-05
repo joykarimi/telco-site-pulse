@@ -7,7 +7,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Site } from "@/types/site";
+import { Site } from "@/pages/Index";
 import { calculateSiteProfitLoss, formatCurrency, getSiteTypeLabel } from "@/lib/calculations";
 
 interface SitesTableProps {
