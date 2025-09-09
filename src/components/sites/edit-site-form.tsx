@@ -1,11 +1,12 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { addSite } from "@/lib/firebase/firestore";
+import { Site, updateSite } from "@/lib/firebase/firestore";
+import { Pencil } from 'lucide-react';
 
 const siteTypes = [
     "Grid only",
@@ -16,25 +17,42 @@ const siteTypes = [
     "Grid + Solar"
 ];
 
-interface AddSiteFormProps {
-    onSiteAdded: () => void;
+interface EditSiteFormProps {
+    site: Site;
+    onSiteUpdated: () => void;
 }
 
-export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
-    const [name, setName] = useState('');
-    const [type, setType] = useState('');
-    const [gridConsumption, setGridConsumption] = useState('0');
-    const [fuelConsumption, setFuelConsumption] = useState('0');
-    const [solarContribution, setSolarContribution] = useState('0');
-    const [earningsSafaricom, setEarningsSafaricom] = useState('0');
-    const [earningsAirtel, setEarningsAirtel] = useState('0');
-    const [earningsJtl, setEarningsJtl] = useState('0');
-    const [gridUnitCost, setGridUnitCost] = useState('0');
-    const [fuelUnitCost, setFuelUnitCost] = useState('0');
-    const [solarMaintenanceCost, setSolarMaintenanceCost] = useState('0');
+export function EditSiteForm({ site, onSiteUpdated }: EditSiteFormProps) {
+    const [name, setName] = useState(site.name);
+    const [type, setType] = useState(site.type);
+    const [gridConsumption, setGridConsumption] = useState(site.gridConsumption.toString());
+    const [fuelConsumption, setFuelConsumption] = useState(site.fuelConsumption.toString());
+    const [solarContribution, setSolarContribution] = useState(site.solarContribution);
+    const [earningsSafaricom, setEarningsSafaricom] = useState(site.earningsSafaricom.toString());
+    const [earningsAirtel, setEarningsAirtel] = useState(site.earningsAirtel.toString());
+    const [earningsJtl, setEarningsJtl] = useState((site.earningsJtl ?? 0).toString());
+    const [gridUnitCost, setGridUnitCost] = useState(site.gridUnitCost.toString());
+    const [fuelUnitCost, setFuelUnitCost] = useState(site.fuelUnitCost.toString());
+    const [solarMaintenanceCost, setSolarMaintenanceCost] = useState(site.solarMaintenanceCost.toString());
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [open, setOpen] = useState(false);
+
+    useEffect(() => {
+        if (open) {
+            setName(site.name);
+            setType(site.type);
+            setGridConsumption(site.gridConsumption.toString());
+            setFuelConsumption(site.fuelConsumption.toString());
+            setSolarContribution(site.solarContribution);
+            setEarningsSafaricom(site.earningsSafaricom.toString());
+            setEarningsAirtel(site.earningsAirtel.toString());
+            setEarningsJtl((site.earningsJtl ?? 0).toString());
+            setGridUnitCost(site.gridUnitCost.toString());
+            setFuelUnitCost(site.fuelUnitCost.toString());
+            setSolarMaintenanceCost(site.solarMaintenanceCost.toString());
+        }
+    }, [open, site]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -42,7 +60,7 @@ export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
         setLoading(true);
 
         try {
-            await addSite({
+            await updateSite(site.id, {
                 name,
                 type,
                 gridConsumption: parseFloat(gridConsumption),
@@ -55,23 +73,10 @@ export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
                 fuelUnitCost: parseFloat(fuelUnitCost),
                 solarMaintenanceCost: parseFloat(solarMaintenanceCost),
             });
-            onSiteAdded();
+            onSiteUpdated();
             setOpen(false);
-            // Reset form fields
-            setName('');
-            setType('');
-            setGridConsumption('0');
-            setFuelConsumption('0');
-            setSolarContribution('0');
-            setEarningsSafaricom('0');
-            setEarningsAirtel('0');
-            setEarningsJtl('0');
-            setGridUnitCost('0');
-            setFuelUnitCost('0');
-            setSolarMaintenanceCost('0');
-
         } catch (err) {
-            setError("Failed to add site. Please try again.");
+            setError("Failed to update site. Please try again.");
             console.error(err);
         } finally {
             setLoading(false);
@@ -81,19 +86,19 @@ export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button>
-                    Add Site
+                <Button variant="ghost" size="icon">
+                    <Pencil className="h-4 w-4" />
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
-                    <DialogTitle>Add a New Site</DialogTitle>
+                    <DialogTitle>Edit Site: {site.name}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4 py-4">
                     {error && <p className="text-destructive col-span-2">{error}</p>}
                     <div className="space-y-2">
                         <Label htmlFor="name">Site Name/ID</Label>
-                        <Input id="name" placeholder="e.g., Kajiado" value={name} onChange={(e) => setName(e.target.value)} required />
+                        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="type">Site Type</Label>
@@ -116,7 +121,7 @@ export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="solarContribution">Solar Contribution (KWh or %)</Label>
-                        <Input id="solarContribution" placeholder="e.g., 500 KWh or 20%" value={solarContribution} onChange={(e) => setSolarContribution(e.target.value)} />
+                        <Input id="solarContribution" value={solarContribution} onChange={(e) => setSolarContribution(e.target.value)} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="earningsSafaricom">Earnings from Safaricom</Label>
@@ -144,7 +149,7 @@ export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
                     </div>
                     <div className="col-span-2">
                         <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? 'Adding Site...' : 'Add Site'}
+                            {loading ? 'Updating Site...' : 'Update Site'}
                         </Button>
                     </div>
                 </form>

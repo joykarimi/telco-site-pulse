@@ -2,13 +2,12 @@
 import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from '@/auth/AuthProvider';
-import { getAssets, Asset, requestAssetMovement } from '@/lib/firebase/firestore';
-
-// Assuming sites are managed centrally or can be derived
-const sites = ["Site A", "Site B", "Site C", "Site D", "Unassigned"];
+import { getAssets, Asset, getSites, Site, requestAssetMovement } from '@/lib/firebase/firestore';
 
 interface NewMovementRequestFormProps {
     onMovementRequested: () => void;
@@ -17,6 +16,7 @@ interface NewMovementRequestFormProps {
 export function NewMovementRequestForm({ onMovementRequested }: NewMovementRequestFormProps) {
   const { user } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState('');
   const [fromSite, setFromSite] = useState('');
   const [toSite, setToSite] = useState('');
@@ -27,11 +27,20 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
 
   useEffect(() => {
     if (open) {
-      const fetchAssets = async () => {
-        const assetsData = await getAssets();
-        setAssets(assetsData);
+      const fetchData = async () => {
+        try {
+            const [assetsData, sitesData] = await Promise.all([
+                getAssets(),
+                getSites()
+            ]);
+            setAssets(assetsData);
+            setSites(sitesData);
+        } catch (err) {
+            setError("Failed to load assets and sites.");
+            console.error(err);
+        }
       };
-      fetchAssets();
+      fetchData();
     }
   }, [open]);
 
@@ -39,8 +48,10 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
     const selectedAsset = assets.find(a => a.id === selectedAssetId);
     if (selectedAsset) {
         setFromSite(selectedAsset.site);
+    } else {
+        setFromSite('');
     }
-  }, [selectedAssetId, assets])
+  }, [selectedAssetId, assets]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +62,11 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
     setError(null);
     setLoading(true);
 
+    const selectedAsset = assets.find(a => a.id === selectedAssetId);
+
     try {
         await requestAssetMovement({
-            assetId: selectedAssetId,
+            assetId: selectedAsset ? selectedAsset.serialNumber : selectedAssetId,
             fromSite,
             toSite,
             reason,
@@ -82,31 +95,38 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
           New Movement Request
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Request Asset Movement</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 py-4">
           {error && <p className="text-destructive">{error}</p>}
-          <Select onValueChange={setSelectedAssetId} value={selectedAssetId} required>
-            <SelectTrigger><SelectValue placeholder="Select Asset" /></SelectTrigger>
-            <SelectContent>
-              {assets.map(asset => <SelectItem key={asset.id} value={asset.id}>{asset.serialNumber} ({asset.type})</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select onValueChange={setFromSite} value={fromSite} required disabled>
-            <SelectTrigger><SelectValue placeholder="From Site" /></SelectTrigger>
-            <SelectContent>
-              {sites.map(site => <SelectItem key={site} value={site}>{site}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select onValueChange={setToSite} value={toSite} required>
-            <SelectTrigger><SelectValue placeholder="To Site" /></SelectTrigger>
-            <SelectContent>
-              {sites.filter(s => s !== fromSite).map(site => <SelectItem key={site} value={site}>{site}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Textarea placeholder="Reason for movement (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <div className="space-y-2">
+            <Label>Asset</Label>
+            <Select onValueChange={setSelectedAssetId} value={selectedAssetId} required>
+                <SelectTrigger><SelectValue placeholder="Select Asset" /></SelectTrigger>
+                <SelectContent>
+                {assets.map(asset => <SelectItem key={asset.id} value={asset.id}>{asset.serialNumber} ({asset.type})</SelectItem>)}
+                </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="fromSite">From Site</Label>
+            <Input id="fromSite" value={fromSite} disabled placeholder="Automatically assigned" />
+          </div>
+          <div className="space-y-2">
+            <Label>To Site</Label>
+            <Select onValueChange={setToSite} value={toSite} required>
+                <SelectTrigger><SelectValue placeholder="Select Destination Site" /></SelectTrigger>
+                <SelectContent>
+                {sites.filter(s => s.name !== fromSite).map(site => <SelectItem key={site.id} value={site.name}>{site.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reason">Reason</Label>
+            <Textarea id="reason" placeholder="Reason for movement (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Submitting...' : 'Submit Request'}
             </Button>

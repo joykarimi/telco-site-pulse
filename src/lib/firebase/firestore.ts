@@ -1,16 +1,23 @@
 
-import { collection, getDocs, addDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where } from "firebase/firestore";
 import { db } from "@/firebase";
+import { AssetType } from "@/lib/asset-types";
 
 // Asset Management Interfaces and Functions
 export interface Asset {
   id: string;
   serialNumber: string;
-  type: string;
+  type: AssetType;
   site: string;
   status: string;
   purchaseDate?: Date;
   installationDate?: Date;
+}
+
+export async function isSerialNumberUnique(serialNumber: string): Promise<boolean> {
+    const q = query(collection(db, "assets"), where("serialNumber", "==", serialNumber));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.empty;
 }
 
 export async function getAssets(): Promise<Asset[]> {
@@ -28,6 +35,16 @@ export async function getAssets(): Promise<Asset[]> {
 
 export async function addAsset(assetData: Omit<Asset, 'id' | 'site'> & { site?: string }): Promise<void> {
     await addDoc(collection(db, "assets"), { ...assetData, site: assetData.site || 'Unassigned' });
+}
+
+export async function updateAsset(assetId: string, assetData: Partial<Omit<Asset, 'id'>>): Promise<void> {
+    const assetRef = doc(db, "assets", assetId);
+    await updateDoc(assetRef, assetData);
+}
+
+export async function deleteAsset(assetId: string): Promise<void> {
+    const assetRef = doc(db, "assets", assetId);
+    await deleteDoc(assetRef);
 }
 
 // Asset Movement Interfaces and Functions
@@ -60,6 +77,16 @@ export async function updateAssetMovementStatus(movementId: string, status: 'App
     await updateDoc(movementRef, { status });
 }
 
+export async function updateAssetMovement(movementId: string, movementData: Partial<Omit<AssetMovement, 'id'>>): Promise<void> {
+    const movementRef = doc(db, "asset_movements", movementId);
+    await updateDoc(movementRef, movementData);
+}
+
+export async function deleteAssetMovement(movementId: string): Promise<void> {
+    const movementRef = doc(db, "asset_movements", movementId);
+    await deleteDoc(movementRef);
+}
+
 
 // Site Management Interfaces and Functions
 export interface Site {
@@ -71,6 +98,7 @@ export interface Site {
     solarContribution: string; // Can be KWh or %
     earningsSafaricom: number;
     earningsAirtel: number;
+    earningsJtl: number;
     gridUnitCost: number;
     fuelUnitCost: number;
     solarMaintenanceCost: number;
@@ -88,3 +116,12 @@ export async function addSite(siteData: Omit<Site, 'id'>): Promise<void> {
     await addDoc(collection(db, "sites"), siteData);
 }
 
+export async function updateSite(siteId: string, siteData: Partial<Omit<Site, 'id'>>): Promise<void> {
+    const siteRef = doc(db, "sites", siteId);
+    await updateDoc(siteRef, siteData);
+}
+
+export async function deleteSite(siteId: string): Promise<void> {
+    const siteRef = doc(db, "sites", siteId);
+    await deleteDoc(siteRef);
+}

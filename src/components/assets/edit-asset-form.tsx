@@ -1,35 +1,46 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { addAsset, isSerialNumberUnique, Site } from '@/lib/firebase/firestore';
-import { assetTypes } from '@/lib/asset-types'; // Import the standardized asset types
+import { Asset, updateAsset, isSerialNumberUnique, Site } from '@/lib/firebase/firestore';
+import { assetTypes } from '@/lib/asset-types';
 
 const assetStatus = ["Active", "In Repair", "Retired"];
 
-interface AddAssetFormProps {
-    onAssetAdded: () => void;
+interface EditAssetFormProps {
+    asset: Asset;
+    onAssetUpdated: () => void;
     sites: Site[];
 }
 
-export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
-  const [serialNumber, setSerialNumber] = useState('');
-  const [assetType, setAssetType] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState<Date | undefined>();
-  const [installationDate, setInstallationDate] = useState<Date | undefined>();
-  const [status, setStatus] = useState('');
-  const [site, setSite] = useState('Unassigned');
+export function EditAssetForm({ asset, onAssetUpdated, sites }: EditAssetFormProps) {
+  const [serialNumber, setSerialNumber] = useState(asset.serialNumber);
+  const [assetType, setAssetType] = useState(asset.type);
+  const [purchaseDate, setPurchaseDate] = useState<Date | undefined>(asset.purchaseDate);
+  const [installationDate, setInstallationDate] = useState<Date | undefined>(asset.installationDate);
+  const [status, setStatus] = useState(asset.status);
+  const [site, setSite] = useState(asset.site);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
+  useEffect(() => {
+    if (open) {
+      setSerialNumber(asset.serialNumber);
+      setAssetType(asset.type);
+      setPurchaseDate(asset.purchaseDate);
+      setInstallationDate(asset.installationDate);
+      setStatus(asset.status);
+      setSite(asset.site);
+    }
+  }, [open, asset]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,14 +54,16 @@ export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
     setLoading(true);
 
     try {
-        const isUnique = await isSerialNumberUnique(serialNumber);
-        if (!isUnique) {
-            setError("Serial number already exists. Please use a unique serial number.");
-            setLoading(false);
-            return;
+        if (serialNumber !== asset.serialNumber) {
+            const isUnique = await isSerialNumberUnique(serialNumber);
+            if (!isUnique) {
+                setError("Serial number already exists. Please use a unique serial number.");
+                setLoading(false);
+                return;
+            }
         }
 
-        await addAsset({
+        await updateAsset(asset.id, {
             serialNumber,
             type: assetType,
             purchaseDate,
@@ -58,18 +71,10 @@ export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
             status,
             site,
         });
-        onAssetAdded(); // Refresh the parent component's list
-        setOpen(false); // Close the dialog
-        // Reset form fields
-        setSerialNumber('');
-        setAssetType('');
-        setPurchaseDate(undefined);
-        setInstallationDate(undefined);
-        setStatus('');
-        setSite('Unassigned');
-
+        onAssetUpdated();
+        setOpen(false);
     } catch (err) {
-        setError("Failed to add asset. Please try again.");
+        setError("Failed to update asset. Please try again.");
         console.error(err);
     } finally {
         setLoading(false);
@@ -79,13 +84,13 @@ export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          Add Asset
+        <Button variant="ghost" size="icon">
+            <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add a New Asset</DialogTitle>
+          <DialogTitle>Edit Asset: {asset.serialNumber}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <p className="text-destructive">{error}</p>}
@@ -136,16 +141,16 @@ export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
               {assetStatus.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select onValueChange={setSite} value={site}>
-            <SelectTrigger><SelectValue placeholder="Site" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Unassigned">Unassigned</SelectItem>
-              {sites.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+            <Select onValueChange={setSite} value={site}>
+                <SelectTrigger><SelectValue placeholder="Site" /></SelectTrigger>
+                <SelectContent>
+                <SelectItem value="Unassigned">Unassigned</SelectItem>
+                {sites.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Adding Asset...' : 'Add Asset'}
-            </Button>
+            {loading ? 'Updating Asset...' : 'Update Asset'}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

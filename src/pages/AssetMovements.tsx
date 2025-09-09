@@ -6,7 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NewMovementRequestForm } from "@/components/assets/asset-movement-requests";
-import { getAssetMovements, updateAssetMovementStatus, AssetMovement } from "@/lib/firebase/firestore";
+import { getAssetMovements, updateAssetMovementStatus, deleteAssetMovement, AssetMovement } from "@/lib/firebase/firestore";
+import { EditAssetMovementForm } from "@/components/asset-movements/edit-asset-movement-form";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
 
 const statusVariant = {
   'Pending': 'default',
@@ -49,6 +52,15 @@ export default function AssetMovements() {
     }
   };
 
+  const handleDelete = async (movementId: string) => {
+    try {
+        await deleteAssetMovement(movementId);
+        fetchMovements();
+    } catch (err) {
+        console.error("Error deleting asset movement: ", err);
+    }
+  };
+
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
@@ -67,11 +79,12 @@ export default function AssetMovements() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Asset ID</TableHead>
+                  <TableHead>Asset Serial</TableHead>
                   <TableHead>From</TableHead>
                   <TableHead>To</TableHead>
+                  <TableHead>Reason</TableHead>
                   <TableHead>Status</TableHead>
-                  {canApprove && <TableHead className="text-right">Actions</TableHead>}
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -80,21 +93,42 @@ export default function AssetMovements() {
                     <TableCell className="font-medium">{move.assetId}</TableCell>
                     <TableCell>{move.fromSite}</TableCell>
                     <TableCell>{move.toSite}</TableCell>
+                    <TableCell>{move.reason}</TableCell>
                     <TableCell>
                       <Badge variant={statusVariant[move.status] || 'default'}>
                         {move.status}
                       </Badge>
                     </TableCell>
-                    {canApprove && (
-                      <TableCell className="text-right">
-                        {move.status === 'Pending' && (
-                          <div className="space-x-2">
-                            <Button variant="outline" size="sm" onClick={() => handleUpdateStatus(move.id, 'Rejected')}>Reject</Button>
-                            <Button size="sm" onClick={() => handleUpdateStatus(move.id, 'Approved')}>Approve</Button>
-                          </div>
-                        )}
-                      </TableCell>
-                    )}
+                    <TableCell className="text-right">
+                        <div className="flex justify-end items-center">
+                            {canApprove && move.status === 'Pending' && (
+                              <div className="space-x-2">
+                                <Button variant="destructive" size="sm" onClick={() => handleUpdateStatus(move.id, 'Rejected')}>Reject</Button>
+                                <Button size="sm" className="bg-green-500 hover:bg-green-600" onClick={() => handleUpdateStatus(move.id, 'Approved')}>Approve</Button>
+                              </div>
+                            )}
+                            <EditAssetMovementForm movement={move} onMovementUpdated={fetchMovements} />
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This action cannot be undone. This will permanently delete the asset movement request.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDelete(move.id)}>Delete</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

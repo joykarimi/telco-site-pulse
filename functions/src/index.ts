@@ -23,11 +23,12 @@ export const grantAdminOnCreate = functions.auth.user().onCreate(async (user) =>
     const firestore = getFirestore();
 
     await auth.setCustomUserClaims(user.uid, { role: "admin" });
-    await firestore.doc(`users/${user.uid}`).set({
+    await firestore.doc(`profiles/${user.uid}`).set({
+      user_id: user.uid,
       email: user.email,
-      fullName: user.displayName || "Admin User",
+      full_name: user.displayName || "Admin User",
       role: "admin",
-      createdAt: FieldValue.serverTimestamp(),
+      created_at: FieldValue.serverTimestamp(),
     }, { merge: true });
 
     console.log(`Successfully granted admin role to: ${user.email}`);
@@ -39,7 +40,7 @@ export const grantAdminOnCreate = functions.auth.user().onCreate(async (user) =>
  * It creates the user, sets their role, and triggers an email for them to
  * set their own password.
  */
-export const createUserWithRole = functions.runWith({ secrets: ["SENDGRID_API_KEY"]}).https.onCall(async (data, context) => {
+export const createUser = functions.runWith({ secrets: ["SENDGRID_API_KEY"]}).https.onCall(async (data, context) => {
   const auth = getAuth();
   const firestore = getFirestore();
 
@@ -62,7 +63,7 @@ export const createUserWithRole = functions.runWith({ secrets: ["SENDGRID_API_KE
       "Missing required fields: email, fullName, and role.",
     );
   }
-  const validRoles = ["admin", "operations_manager", "maintenance_manager", "viewer"];
+  const validRoles = ["admin", "operations_manager", "maintenance_manager", "user"];
   if (!validRoles.includes(role)) {
     throw new functions.https.HttpsError(
       "invalid-argument",
@@ -82,12 +83,13 @@ export const createUserWithRole = functions.runWith({ secrets: ["SENDGRID_API_KE
 
     // 4. Set Custom Role & Firestore Profile
     await auth.setCustomUserClaims(userRecord.uid, { role });
-    await firestore.doc(`users/${userRecord.uid}`).set({
-      fullName: fullName,
+    await firestore.doc(`profiles/${userRecord.uid}`).set({
+      user_id: userRecord.uid,
+      full_name: fullName,
       email: email,
       role: role,
       createdBy: context.auth.uid,
-      createdAt: FieldValue.serverTimestamp(),
+      created_at: FieldValue.serverTimestamp(),
     });
     functions.logger.info(`Set custom claims and created user profile for ${userRecord.uid}`);
 
@@ -126,4 +128,62 @@ export const createUserWithRole = functions.runWith({ secrets: ["SENDGRID_API_KE
       "An unexpected error occurred while creating the user.",
     );
   }
+});
+
+
+export const manageUserRole = functions.https.onCall(async (data, context) => {
+    const auth = getAuth();
+    const firestore = getFirestore();
+
+    if (!context.auth || context.auth.token.role !== 'admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Only admins can manage user roles.');
+    }
+
+    const { userId, role } = data;
+    if (!userId || !role) {
+        throw new functions.https.HttpsError('invalid-argument', 'User ID and role must be provided.');
+    }
+
+    try {
+        await auth.setCustomUserClaims(userId, { role });
+        const querySnapshot = await firestore.collection('profiles').where('user_id', '==', userId).get();
+        if (querySnapshot.empty) {
+            throw new functions.https.HttpsError('not-found', 'User profile not found.');
+        }
+        const docId = querySnapshot.docs[0].id;
+        await firestore.doc(`profiles/${docId}`).update({ role });
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating user role:", error);
+        throw new functions.https.HttpsError('internal', 'Failed to update user role.');
+    }
+});
+
+export const deleteUser = functions.https.onCall(async (data, context) => {
+    const auth = getAuth();
+    const firestore = getFirestore();
+
+    if (!context.auth || context.auth.token.role !== 'admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Only admins can delete users.');
+    }
+
+    const { userId } = data;
+    if (!userId) {
+        throw new functions.https.HttpsError('invalid-argument', 'User ID must be provided.');
+    }
+
+    try {
+        await auth.deleteUser(userId);
+        const querySnapshot = await firestore.collection('profiles').where('user_id', '==', userId).get();
+        if (!querySnapshot.empty) {
+            const docId = querySnapshot.docs[0].id;
+            await firestore.doc(`profiles/${docId}`).delete();
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error deleting user:", error);
+        throw new functions.https.HttpsError('internal', 'Failed to delete user.');
+    }
 });

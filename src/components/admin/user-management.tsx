@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { db } from "@/integrations/firebase/client";
 import { collection, getDocs } from "firebase/firestore";
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { UserPlus, Users, Shield, Settings, User } from "lucide-react";
+import { UserPlus, Users, Shield, Settings, User, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export type UserRole = "admin" | "maintenance_manager" | "operations_manager" | "user";
 
@@ -46,6 +47,7 @@ const roleColors = {
 const functions = getFunctions();
 const createUserFn = httpsCallable(functions, 'createUser');
 const manageUserRoleFn = httpsCallable(functions, 'manageUserRole');
+const deleteUserFn = httpsCallable(functions, 'deleteUser');
 
 export function UserManagement() {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -128,6 +130,23 @@ export function UserManagement() {
       toast({
         title: "Error",
         description: error.message || "Failed to update user role",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    try {
+      await deleteUserFn({ userId });
+      toast({
+        title: "Success",
+        description: "User deleted successfully",
+      });
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
         variant: "destructive",
       });
     }
@@ -246,6 +265,25 @@ export function UserManagement() {
                               {roleLabels[role]}
                             </Button>
                           ))}
+                           <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="icon">
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This action cannot be undone. This will permanently delete the user and all associated data.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => deleteUser(user.user_id)}>Delete</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </div>
                       </TableCell>
                     </TableRow>
