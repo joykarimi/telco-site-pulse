@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 240 5.9% 98%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
@@ -24,6 +24,9 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 262.1 83.3% 57.8%;
     --radius: 0.5rem;
+    --color-green: #22c55e;
+    --color-red: #ef4444;
+    --color-blue: #3b82f6;
   }
 
   .dark {
@@ -46,6 +49,9 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 263.4 95.2% 66.3%;
+    --color-green: #4ade80;
+    --color-red: #f87171;
+    --color-blue: #60a5fa;
   }
 }
 
@@ -55,6 +61,16 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  
+  .card {
+    backdrop-filter: blur(10px);
+    background-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  [data-sidebar="sidebar"] {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 }
 

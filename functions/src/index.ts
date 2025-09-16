@@ -23,7 +23,7 @@ export const grantAdminOnCreate = functions.auth.user().onCreate(async (user) =>
     const firestore = getFirestore();
 
     await auth.setCustomUserClaims(user.uid, { role: "admin" });
-    await firestore.doc(`profiles/${user.uid}`).set({
+    await firestore.doc(`users/${user.uid}`).set({
       user_id: user.uid,
       email: user.email,
       full_name: user.displayName || "Admin User",
@@ -83,7 +83,7 @@ export const createUser = functions.runWith({ secrets: ["SENDGRID_API_KEY"]}).ht
 
     // 4. Set Custom Role & Firestore Profile
     await auth.setCustomUserClaims(userRecord.uid, { role });
-    await firestore.doc(`profiles/${userRecord.uid}`).set({
+    await firestore.doc(`users/${userRecord.uid}`).set({
       user_id: userRecord.uid,
       full_name: fullName,
       email: email,
@@ -146,12 +146,12 @@ export const manageUserRole = functions.https.onCall(async (data, context) => {
 
     try {
         await auth.setCustomUserClaims(userId, { role });
-        const querySnapshot = await firestore.collection('profiles').where('user_id', '==', userId).get();
+        const querySnapshot = await firestore.collection('users').where('user_id', '==', userId).get();
         if (querySnapshot.empty) {
             throw new functions.https.HttpsError('not-found', 'User profile not found.');
         }
         const docId = querySnapshot.docs[0].id;
-        await firestore.doc(`profiles/${docId}`).update({ role });
+        await firestore.doc(`users/${docId}`).update({ role });
 
         return { success: true };
     } catch (error) {
@@ -175,10 +175,10 @@ export const deleteUser = functions.https.onCall(async (data, context) => {
 
     try {
         await auth.deleteUser(userId);
-        const querySnapshot = await firestore.collection('profiles').where('user_id', '==', userId).get();
+        const querySnapshot = await firestore.collection('users').where('user_id', '==', userId).get();
         if (!querySnapshot.empty) {
             const docId = querySnapshot.docs[0].id;
-            await firestore.doc(`profiles/${docId}`).delete();
+            await firestore.doc(`users/${docId}`).delete();
         }
 
         return { success: true };

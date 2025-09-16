@@ -1,22 +1,44 @@
 import { useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  ChartConfig,
+} from '@/components/ui/chart';
 import { Asset, Site } from '@/pages/Index';
-import { 
-  Activity, 
-  AlertTriangle, 
-  Archive, 
-  Package, 
+import {
+  Package,
   TrendingUp,
   Zap,
-  Shield,
-  Wifi,
-  Server,
-  Battery,
   Sun,
-  Wrench
+  Battery,
+  Server,
+  Wifi,
+  Shield,
+  Wrench,
 } from 'lucide-react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  Legend,
+} from 'recharts';
 
 interface AssetsDashboardProps {
   assets: Asset[];
@@ -33,8 +55,6 @@ const ASSET_ICONS: Record<string, React.ComponentType<any>> = {
   electronic_lock: Wrench,
 };
 
-const COLORS = ['hsl(217 91% 60%)', 'hsl(142 76% 36%)', 'hsl(38 92% 50%)', 'hsl(0 84% 60%)', 'hsl(193 82% 31%)', 'hsl(262 52% 47%)', 'hsl(346 77% 49%)'];
-
 export function AssetsDashboard({ assets, sites }: AssetsDashboardProps) {
   const assetTypeData = useMemo(() => {
     return Object.entries(
@@ -43,22 +63,44 @@ export function AssetsDashboard({ assets, sites }: AssetsDashboardProps) {
         return acc;
       }, {} as Record<string, number>)
     ).map(([type, count]) => ({
-      name: type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      name: type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
       value: count,
       type: type,
+      fill: `var(--color-${type})`,
     }));
   }, [assets]);
 
   const siteDistribution = useMemo(() => {
-    return sites.map(site => {
-      const siteAssets = assets.filter(asset => asset.site_id === site.id);
-      return {
-        siteName: site.name,
-        total: siteAssets.length,
-      };
-    }).filter(site => site.total > 0);
+    return sites
+      .map((site) => {
+        const siteAssets = assets.filter((asset) => asset.site_id === site.id);
+        return {
+          siteName: site.name,
+          total: siteAssets.length,
+        };
+      })
+      .filter((site) => site.total > 0);
   }, [assets, sites]);
 
+  const chartConfig = {
+    ...assetTypeData.reduce((acc, cur) => {
+      acc[cur.type] = {
+        label: cur.name,
+        theme: {
+          light: `hsl(var(--chart-${assetTypeData.findIndex((a) => a.type === cur.type) + 1}))`,
+          dark: `hsl(var(--chart-${assetTypeData.findIndex((a) => a.type === cur.type) + 1}))`,
+        },
+      };
+      return acc;
+    }, {} as ChartConfig),
+    total: {
+      label: 'Total',
+      theme: {
+        light: 'hsl(142 76% 36%)',
+        dark: 'hsl(142 76% 46%)',
+      },
+    },
+  } satisfies ChartConfig;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -90,37 +132,29 @@ export function AssetsDashboard({ assets, sites }: AssetsDashboardProps) {
             <CardDescription>Equipment breakdown by category</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={assetTypeData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                  animationBegin={0}
-                  animationDuration={800}
-                >
-                  {assetTypeData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value: number) => [value, 'Count']}
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: 'var(--radius)',
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            <ChartContainer config={chartConfig}>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Pie
+                    data={assetTypeData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    dataKey="value"
+                  >
+                    {assetTypeData.map((entry) => (
+                      <Cell key={`cell-${entry.type}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartLegend content={<ChartLegendContent />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartContainer>
           </CardContent>
         </Card>
-
       </div>
 
       {/* Site Distribution */}
@@ -133,41 +167,28 @@ export function AssetsDashboard({ assets, sites }: AssetsDashboardProps) {
           <CardDescription>Asset distribution across all locations</CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={siteDistribution} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis 
-                dataKey="siteName" 
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis 
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 'var(--radius)',
-                }}
-              />
-              <Legend />
-              <Bar 
-                dataKey="total" 
-                stackId="a" 
-                fill="hsl(142 76% 36%)" 
-                name="Total"
-                radius={[2, 2, 0, 0]}
-                animationBegin={0}
-                animationDuration={800}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          <ChartContainer config={chartConfig}>
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={siteDistribution} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="siteName"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis fontSize={12} tickLine={false} axisLine={false} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Legend />
+                <Bar
+                  dataKey="total"
+                  stackId="a"
+                  fill="var(--color-total)"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartContainer>
         </CardContent>
       </Card>
 
@@ -176,8 +197,8 @@ export function AssetsDashboard({ assets, sites }: AssetsDashboardProps) {
         {assetTypeData.map((asset, index) => {
           const IconComponent = ASSET_ICONS[asset.type] || Package;
           return (
-            <Card 
-              key={asset.type} 
+            <Card
+              key={asset.type}
               className="bg-gradient-card hover:shadow-custom-hover transition-all duration-300 hover:scale-105 animate-bounce-in border-0"
               style={{ animationDelay: `${index * 100}ms` }}
             >

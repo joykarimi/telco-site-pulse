@@ -9,10 +9,13 @@ import {
 } from '../ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { useAuth } from '../../auth/AuthProvider';
-import { LogOut, Bell, Settings } from 'lucide-react';
+import { LogOut, Bell, Settings, Menu } from 'lucide-react';
+import { ModeToggle } from '../mode-toggle';
+import { useIsMobile } from '@/hooks/use-mobile';
 
-export function Header() {
+export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, signOut, role } = useAuth();
+  const isMobile = useIsMobile();
 
   const getInitials = (name?: string | null) => {
     if (!name) return '';
@@ -31,24 +34,38 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 backdrop-blur-lg bg-white/70 dark:bg-slate-800/70 shadow-lg z-10 px-6 py-3 flex justify-between items-center rounded-b-2xl">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+    <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/50 px-6 backdrop-blur-sm">
+      {isMobile && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onMenuClick}
+          className="-ml-2"
+        >
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Toggle Menu</span>
+        </Button>
+      )}
+      <h2 className="text-lg font-semibold text-foreground">
         Dashboard
       </h2>
 
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shadow-inner transition">
+      <div className="flex flex-1 items-center gap-4 justify-end">
+        <ModeToggle />
+        <Button variant="ghost" size="icon" className="rounded-full">
           <Bell className="h-5 w-5" />
+          <span className="sr-only">Notifications</span>
         </Button>
-        <Button variant="ghost" size="icon" className="rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 shadow-inner transition">
+        <Button variant="ghost" size="icon" className="rounded-full">
           <Settings className="h-5 w-5" />
+           <span className="sr-only">Settings</span>
         </Button>
         
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar className="h-10 w-10 shadow-md">
+                <Avatar className="h-10 w-10">
                   <AvatarFallback className="bg-primary/20 text-primary font-bold">
                     {getInitials(user.displayName)}
                   </AvatarFallback>

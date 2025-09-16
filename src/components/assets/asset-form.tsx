@@ -9,14 +9,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { addAsset, isSerialNumberUnique, Site } from '@/lib/firebase/firestore';
-import { assetTypes } from '@/lib/asset-types'; // Import the standardized asset types
+import { addAsset, isSerialNumberUnique, SiteDefinition } from '@/lib/firebase/firestore';
+import { assetTypes } from '@/lib/asset-types';
+import { SearchableSelect } from "@/components/ui/searchable-select"; // Import the new component
 
 const assetStatus = ["Active", "In Repair", "Retired"];
 
 interface AddAssetFormProps {
     onAssetAdded: () => void;
-    sites: Site[];
+    sites: SiteDefinition[];
 }
 
 export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
@@ -25,11 +26,12 @@ export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
   const [purchaseDate, setPurchaseDate] = useState<Date | undefined>();
   const [installationDate, setInstallationDate] = useState<Date | undefined>();
   const [status, setStatus] = useState('');
-  const [site, setSite] = useState('Unassigned');
+  const [site, setSite] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
+  const siteOptions = sites.filter(s => s.name !== 'Unassigned').map(s => ({ value: s.name, label: s.name }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +39,11 @@ export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
 
     if (!serialNumber) {
         setError("Serial number is required.");
+        return;
+    }
+
+    if (!site) {
+        setError("Please select a site.");
         return;
     }
 
@@ -58,15 +65,15 @@ export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
             status,
             site,
         });
-        onAssetAdded(); // Refresh the parent component's list
-        setOpen(false); // Close the dialog
+        onAssetAdded();
+        setOpen(false);
         // Reset form fields
         setSerialNumber('');
         setAssetType('');
         setPurchaseDate(undefined);
         setInstallationDate(undefined);
         setStatus('');
-        setSite('Unassigned');
+        setSite('');
 
     } catch (err) {
         setError("Failed to add asset. Please try again.");
@@ -136,13 +143,12 @@ export function AddAssetForm({ onAssetAdded, sites }: AddAssetFormProps) {
               {assetStatus.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select onValueChange={setSite} value={site}>
-            <SelectTrigger><SelectValue placeholder="Site" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Unassigned">Unassigned</SelectItem>
-              {sites.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <SearchableSelect 
+            options={siteOptions} 
+            value={site} 
+            onChange={setSite} 
+            placeholder="Select a site"
+          />
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Adding Asset...' : 'Add Asset'}
             </Button>

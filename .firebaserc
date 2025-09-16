@@ -12,7 +12,13 @@
       }
     }
   },
-  "etags": {},
+  "etags": {
+    "telco-c0b89": {
+      "extensionInstances": {
+        "firestore-send-email": "b28ca2929e392e28c56eed5cffe3a07a5ad738a54a5619eae3c4bdd626a7b24d"
+      }
+    }
+  },
   "functions": {
     "source": "functions"
   }

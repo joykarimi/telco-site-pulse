@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { addSite } from "@/lib/firebase/firestore";
+import { addSiteDefinition, addSiteMonthlyData } from "@/lib/firebase/firestore";
 
 const siteTypes = [
     "Grid only",
@@ -13,25 +13,21 @@ const siteTypes = [
     "Grid + Generator + Solar",
     "Generator only",
     "Generator + Solar",
-    "Grid + Solar"
+    "Grid + Solar",
+    "Multi-Vendor Site",
+    "Coloc Site",
+    "Single-Operator Site"
 ];
 
 interface AddSiteFormProps {
     onSiteAdded: () => void;
+    selectedMonth: number;
+    selectedYear: number;
 }
 
-export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
+export function AddSiteForm({ onSiteAdded, selectedMonth, selectedYear }: AddSiteFormProps) {
     const [name, setName] = useState('');
     const [type, setType] = useState('');
-    const [gridConsumption, setGridConsumption] = useState('0');
-    const [fuelConsumption, setFuelConsumption] = useState('0');
-    const [solarContribution, setSolarContribution] = useState('0');
-    const [earningsSafaricom, setEarningsSafaricom] = useState('0');
-    const [earningsAirtel, setEarningsAirtel] = useState('0');
-    const [earningsJtl, setEarningsJtl] = useState('0');
-    const [gridUnitCost, setGridUnitCost] = useState('0');
-    const [fuelUnitCost, setFuelUnitCost] = useState('0');
-    const [solarMaintenanceCost, setSolarMaintenanceCost] = useState('0');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [open, setOpen] = useState(false);
@@ -42,33 +38,30 @@ export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
         setLoading(true);
 
         try {
-            await addSite({
-                name,
-                type,
-                gridConsumption: parseFloat(gridConsumption),
-                fuelConsumption: parseFloat(fuelConsumption),
-                solarContribution,
-                earningsSafaricom: parseFloat(earningsSafaricom),
-                earningsAirtel: parseFloat(earningsAirtel),
-                earningsJtl: parseFloat(earningsJtl),
-                gridUnitCost: parseFloat(gridUnitCost),
-                fuelUnitCost: parseFloat(fuelUnitCost),
-                solarMaintenanceCost: parseFloat(solarMaintenanceCost),
+            // 1. Add the site definition
+            const newSiteId = await addSiteDefinition({ name, type });
+
+            // 2. Add an initial empty monthly data entry for the current context
+            await addSiteMonthlyData({
+                siteId: newSiteId,
+                month: selectedMonth,
+                year: selectedYear,
+                gridConsumption: 0,
+                fuelConsumption: 0,
+                solarContribution: '0',
+                earningsSafaricom: 0,
+                earningsAirtel: 0,
+                earningsJtl: 0,
+                gridUnitCost: 0,
+                fuelUnitCost: 0,
+                solarMaintenanceCost: 0,
             });
+
             onSiteAdded();
             setOpen(false);
             // Reset form fields
             setName('');
             setType('');
-            setGridConsumption('0');
-            setFuelConsumption('0');
-            setSolarContribution('0');
-            setEarningsSafaricom('0');
-            setEarningsAirtel('0');
-            setEarningsJtl('0');
-            setGridUnitCost('0');
-            setFuelUnitCost('0');
-            setSolarMaintenanceCost('0');
 
         } catch (err) {
             setError("Failed to add site. Please try again.");
@@ -85,15 +78,15 @@ export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
                     Add Site
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Add a New Site</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4 py-4">
+                <form onSubmit={handleSubmit} className="grid gap-4 py-4">
                     {error && <p className="text-destructive col-span-2">{error}</p>}
                     <div className="space-y-2">
                         <Label htmlFor="name">Site Name/ID</Label>
-                        <Input id="name" placeholder="e.g., Kajiado" value={name} onChange={(e) => setName(e.target.value)} required />
+                        <Input id="name" placeholder="e.g., Kajiado-01" value={name} onChange={(e) => setName(e.target.value)} required />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="type">Site Type</Label>
@@ -105,42 +98,6 @@ export function AddSiteForm({ onSiteAdded }: AddSiteFormProps) {
                                 {siteTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
                             </SelectContent>
                         </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="gridConsumption">Monthly Grid Consumption (KWh)</Label>
-                        <Input id="gridConsumption" type="number" value={gridConsumption} onChange={(e) => setGridConsumption(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="fuelConsumption">Monthly Fuel Consumption (liters)</Label>
-                        <Input id="fuelConsumption" type="number" value={fuelConsumption} onChange={(e) => setFuelConsumption(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="solarContribution">Solar Contribution (KWh or %)</Label>
-                        <Input id="solarContribution" placeholder="e.g., 500 KWh or 20%" value={solarContribution} onChange={(e) => setSolarContribution(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="earningsSafaricom">Earnings from Safaricom</Label>
-                        <Input id="earningsSafaricom" type="number" value={earningsSafaricom} onChange={(e) => setEarningsSafaricom(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="earningsAirtel">Earnings from Airtel</Label>
-                        <Input id="earningsAirtel" type="number" value={earningsAirtel} onChange={(e) => setEarningsAirtel(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="earningsJtl">Earnings from JTL</Label>
-                        <Input id="earningsJtl" type="number" value={earningsJtl} onChange={(e) => setEarningsJtl(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="gridUnitCost">Grid Unit Cost</Label>
-                        <Input id="gridUnitCost" type="number" value={gridUnitCost} onChange={(e) => setGridUnitCost(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="fuelUnitCost">Fuel Unit Cost</Label>
-                        <Input id="fuelUnitCost" type="number" value={fuelUnitCost} onChange={(e) => setFuelUnitCost(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="solarMaintenanceCost">Solar Maintenance Cost</Label>
-                        <Input id="solarMaintenanceCost" type="number" value={solarMaintenanceCost} onChange={(e) => setSolarMaintenanceCost(e.target.value)} />
                     </div>
                     <div className="col-span-2">
                         <Button type="submit" className="w-full" disabled={loading}>

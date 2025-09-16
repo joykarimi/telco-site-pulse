@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from '@/auth/AuthProvider';
-import { getAssets, Asset, getSites, Site, requestAssetMovement } from '@/lib/firebase/firestore';
+import { getAssets, Asset, getSiteDefinitions, SiteDefinition, requestAssetMovement } from '@/lib/firebase/firestore';
 
 interface NewMovementRequestFormProps {
     onMovementRequested: () => void;
@@ -16,7 +16,7 @@ interface NewMovementRequestFormProps {
 export function NewMovementRequestForm({ onMovementRequested }: NewMovementRequestFormProps) {
   const { user } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [sites, setSites] = useState<Site[]>([]);
+  const [sites, setSites] = useState<SiteDefinition[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState('');
   const [fromSite, setFromSite] = useState('');
   const [toSite, setToSite] = useState('');
@@ -31,7 +31,7 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
         try {
             const [assetsData, sitesData] = await Promise.all([
                 getAssets(),
-                getSites()
+                getSiteDefinitions()
             ]);
             setAssets(assetsData);
             setSites(sitesData);

@@ -1,5 +1,5 @@
 
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where, writeBatch, getDoc } from "firebase/firestore";
 import { db } from "@/firebase";
 import { AssetType } from "@/lib/asset-types";
 
@@ -47,6 +47,17 @@ export async function deleteAsset(assetId: string): Promise<void> {
     await deleteDoc(assetRef);
 }
 
+export async function deleteAllAssets(): Promise<void> {
+    const assetsCollection = collection(db, "assets");
+    const assetSnapshot = await getDocs(assetsCollection);
+    const batch = writeBatch(db);
+    assetSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+    });
+    await batch.commit();
+}
+
+
 // Asset Movement Interfaces and Functions
 export type AssetMovementStatus = 'Pending' | 'Approved' | 'Rejected';
 
@@ -89,13 +100,20 @@ export async function deleteAssetMovement(movementId: string): Promise<void> {
 
 
 // Site Management Interfaces and Functions
-export interface Site {
+export interface SiteDefinition {
     id: string;
     name: string;
     type: string;
+}
+
+export interface SiteMonthlyData {
+    id: string;
+    siteId: string;
+    month: number;
+    year: number;
     gridConsumption: number;
     fuelConsumption: number;
-    solarContribution: string; // Can be KWh or %
+    solarContribution: string;
     earningsSafaricom: number;
     earningsAirtel: number;
     earningsJtl: number;
@@ -104,24 +122,99 @@ export interface Site {
     solarMaintenanceCost: number;
 }
 
-export async function getSites(): Promise<Site[]> {
-    const querySnapshot = await getDocs(collection(db, "sites"));
-    return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-    } as Site));
+export interface CombinedSiteData extends SiteDefinition {
+    monthlyData: Omit<SiteMonthlyData, 'id' | 'siteId'> | null;
 }
 
-export async function addSite(siteData: Omit<Site, 'id'>): Promise<void> {
-    await addDoc(collection(db, "sites"), siteData);
+export async function getSiteDefinitions(): Promise<SiteDefinition[]> {
+    const q = query(collection(db, "siteDefinitions"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SiteDefinition));
 }
 
-export async function updateSite(siteId: string, siteData: Partial<Omit<Site, 'id'>>): Promise<void> {
-    const siteRef = doc(db, "sites", siteId);
-    await updateDoc(siteRef, siteData);
+export async function addSiteDefinition(siteData: Omit<SiteDefinition, 'id'>): Promise<string> {
+    const docRef = await addDoc(collection(db, "siteDefinitions"), siteData);
+    return docRef.id;
 }
 
-export async function deleteSite(siteId: string): Promise<void> {
-    const siteRef = doc(db, "sites", siteId);
-    await deleteDoc(siteRef);
+export async function getSiteMonthlyData(month: number, year: number): Promise<SiteMonthlyData[]> {
+    const q = query(collection(db, "siteMonthlyData"), where("month", "==", month), where("year", "==", year));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SiteMonthlyData));
+}
+
+export async function addSiteMonthlyData(data: Omit<SiteMonthlyData, 'id'>): Promise<void> {
+    await addDoc(collection(db, "siteMonthlyData"), data);
+}
+
+export async function addMultipleSitesWithMonthlyData(sitesData: any[], month: number, year: number): Promise<void> {
+    const batch = writeBatch(db);
+    const siteDefinitions = await getSiteDefinitions();
+    const siteNameToId = new Map(siteDefinitions.map(s => [s.name.toLowerCase(), s.id]));
+
+    for (const row of sitesData) {
+        let siteId = siteNameToId.get(row.Site.toLowerCase());
+
+        if (!siteId) {
+            const newSiteDefRef = doc(collection(db, "siteDefinitions"));
+            batch.set(newSiteDefRef, { name: row.Site, type: row.Type });
+            siteId = newSiteDefRef.id;
+            siteNameToId.set(row.Site.toLowerCase(), siteId);
+        }
+
+        const monthlyDataRef = doc(collection(db, "siteMonthlyData"));
+        batch.set(monthlyDataRef, {
+            siteId,
+            month,
+            year,
+            earningsSafaricom: parseFloat(row.Safaricom || 0),
+            earningsAirtel: parseFloat(row.Airtel || 0),
+            earningsJtl: parseFloat(row.JTL || 0),
+            gridConsumption: parseFloat(row['Grid Expense'] || 0),
+            gridUnitCost: 1,
+            fuelConsumption: parseFloat(row['Fuel Expense'] || 0),
+            fuelUnitCost: 1,
+            solarMaintenanceCost: parseFloat(row['Solar Expense'] || 0),
+            solarContribution: '0'
+        });
+    }
+
+    await batch.commit();
+}
+
+
+export async function updateSiteMonthlyData(monthlyDataId: string, data: Partial<Omit<SiteMonthlyData, 'id'>>): Promise<void> {
+    const monthlyDataRef = doc(db, "siteMonthlyData", monthlyDataId);
+    await updateDoc(monthlyDataRef, data);
+}
+
+export async function deleteSiteDefinition(siteId: string): Promise<void> {
+    const batch = writeBatch(db);
+    const siteRef = doc(db, "siteDefinitions", siteId);
+
+    // Get site name to find associated assets
+    const siteDoc = await getDoc(siteRef);
+    if (!siteDoc.exists()) {
+        throw new Error("Site not found");
+    }
+    const siteName = siteDoc.data().name;
+
+    // Delete the site definition
+    batch.delete(siteRef);
+
+    // Delete all associated monthly data
+    const monthlyDataQuery = query(collection(db, "siteMonthlyData"), where("siteId", "==", siteId));
+    const monthlyDataSnapshot = await getDocs(monthlyDataQuery);
+    monthlyDataSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+    });
+
+    // Delete all associated assets
+    const assetsQuery = query(collection(db, "assets"), where("site", "==", siteName));
+    const assetsSnapshot = await getDocs(assetsQuery);
+    assetsSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+    });
+
+    await batch.commit();
 }

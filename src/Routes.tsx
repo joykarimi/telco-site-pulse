@@ -1,7 +1,8 @@
+
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import Layout from './components/Layout';
-import Index from './pages/index';
+import Dashboard from './pages/Dashboard'; // Import the Dashboard component
 import Auth from './pages/Auth';
 import NotFound from './pages/NotFound';
 import CreateUserForm from './components/UserManagement/CreateUserForm';
@@ -10,6 +11,7 @@ import Assets from './pages/Assets';
 import Sites from './pages/Sites';
 import RevenueBreakdown from './pages/RevenueBreakdown';
 import AssetMovements from './pages/AssetMovements';
+import SiteProfitability from './pages/SiteProfitability';
 import Settings from './pages/Settings';
 
 function ProtectedLayout() {
@@ -59,11 +61,13 @@ export default function AppRoutes() {
         <Route path="/auth" element={<Auth />} />
 
         <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Dashboard />} /> {/* Set Dashboard as the default route */}
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/assets" element={<Assets />} />
           <Route path="/sites" element={<Sites />} />
           <Route path="/revenue-breakdown" element={<RevenueBreakdown />} />
           <Route path="/asset-movement-requests" element={<AssetMovements />} />
+          <Route path="/site-profitability" element={<SiteProfitability />} />
           <Route path="/settings" element={<Settings />} />
           
           <Route path="/admin" element={<AdminLayout />}>

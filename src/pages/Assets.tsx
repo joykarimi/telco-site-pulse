@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { AddAssetForm } from "@/components/assets/asset-form";
-import { getAssets, Asset, deleteAsset, getSites, Site } from "@/lib/firebase/firestore";
+import { getAssets, Asset, deleteAsset, getSiteDefinitions, SiteDefinition, deleteAllAssets } from "@/lib/firebase/firestore";
 import { EditAssetForm } from "@/components/assets/edit-asset-form";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -23,7 +23,7 @@ export default function Assets() {
   const { role } = useAuth();
   const canManageAssets = role === 'admin' || role === 'maintenance_manager';
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [sites, setSites] = useState<Site[]>([]);
+  const [sites, setSites] = useState<SiteDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -31,7 +31,7 @@ export default function Assets() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [assetsData, sitesData] = await Promise.all([getAssets(), getSites()]);
+      const [assetsData, sitesData] = await Promise.all([getAssets(), getSiteDefinitions()]);
       setAssets(assetsData);
       setSites(sitesData);
       setError(null);
@@ -40,6 +40,18 @@ export default function Assets() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteAllAssets = async () => {
+    if (window.confirm("Are you sure you want to delete all assets? This action cannot be undone.")) {
+        try {
+            await deleteAllAssets();
+            fetchData();
+        } catch (err) {
+            console.error("Error deleting all assets: ", err);
+            setError("Failed to delete all assets.");
+        }
     }
   };
 
@@ -98,6 +110,7 @@ export default function Assets() {
             <h2 className="text-3xl font-bold tracking-tight">Asset Management</h2>
             <div className="flex items-center space-x-2">
                 {canManageAssets && <AddAssetForm onAssetAdded={fetchData} sites={sites} />}
+                {canManageAssets && <Button variant="destructive" onClick={handleDeleteAllAssets}>Delete All Assets</Button>}
             </div>
         </div>
 

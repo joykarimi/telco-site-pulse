@@ -9,15 +9,16 @@ import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Asset, updateAsset, isSerialNumberUnique, Site } from '@/lib/firebase/firestore';
+import { Asset, updateAsset, isSerialNumberUnique, SiteDefinition } from '@/lib/firebase/firestore';
 import { assetTypes } from '@/lib/asset-types';
+import { SearchableSelect } from "@/components/ui/searchable-select"; // Import the new component
 
 const assetStatus = ["Active", "In Repair", "Retired"];
 
 interface EditAssetFormProps {
     asset: Asset;
     onAssetUpdated: () => void;
-    sites: Site[];
+    sites: SiteDefinition[];
 }
 
 export function EditAssetForm({ asset, onAssetUpdated, sites }: EditAssetFormProps) {
@@ -30,6 +31,11 @@ export function EditAssetForm({ asset, onAssetUpdated, sites }: EditAssetFormPro
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+
+  const siteOptions = [
+    { value: 'Unassigned', label: 'Unassigned' },
+    ...sites.map(s => ({ value: s.name, label: s.name }))
+  ];
 
   useEffect(() => {
     if (open) {
@@ -141,13 +147,12 @@ export function EditAssetForm({ asset, onAssetUpdated, sites }: EditAssetFormPro
               {assetStatus.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-            <Select onValueChange={setSite} value={site}>
-                <SelectTrigger><SelectValue placeholder="Site" /></SelectTrigger>
-                <SelectContent>
-                <SelectItem value="Unassigned">Unassigned</SelectItem>
-                {sites.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
+          <SearchableSelect 
+            options={siteOptions} 
+            value={site} 
+            onChange={setSite} 
+            placeholder="Select a site"
+          />
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Updating Asset...' : 'Update Asset'}
           </Button>
