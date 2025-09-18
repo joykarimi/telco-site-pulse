@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/auth/AuthProvider';
 import { toast } from 'sonner';
-import { Building2, Loader2 } from 'lucide-react';
-import telecomTowerImage from '@/assets/images/telecom_tower.jpg';
-import { getAuth, checkActionCode, applyActionCode, confirmPasswordReset } from 'firebase/auth';
+import { Loader2 } from 'lucide-react';
+import towerImage from '@/assets/images/tower.jpg';
+import alanDickLogo from '@/assets/images/alandick_logo.png';
+import { getAuth, checkActionCode, confirmPasswordReset } from 'firebase/auth';
 
 export default function Auth() {
     const [isLoading, setIsLoading] = useState(false);
@@ -139,7 +140,6 @@ export default function Auth() {
                         <div className="grid gap-2">
                             <div className="flex items-center">
                                 <Label htmlFor="signin-password">Password</Label>
-                                {/* <a href="#" className="ml-auto inline-block text-sm underline">Forgot your password?</a> */}
                             </div>
                             <Input
                                 id="signin-password"
@@ -238,20 +238,17 @@ export default function Auth() {
         <div className="w-full lg:grid lg:min-h-screen lg:grid-cols-2">
             {/* Left Branding Column */}
             <div className="hidden bg-muted lg:flex lg:flex-col items-center justify-center p-8 border-r">
-                <div className="flex items-center gap-4 text-foreground">
-                    <Building2 className="h-10 w-10" />
-                    <h1 className="text-3xl font-bold">Telecom P&L System</h1>
-                </div>
+                <img src={alanDickLogo} alt="AlanDick Logo" className="h-20" />
                 <p className="text-center text-lg mt-4 max-w-md">
                     Your centralized hub for managing telecommunication sites, assets, and profitability with precision and foresight.
                 </p>
                 <img
-                    src={telecomTowerImage}
-                    alt="Modern Telecommunication Tower in Kenya"
+                    src={towerImage}
+                    alt="Telecommunication Tower"
                     className="mt-8 rounded-md aspect-video object-cover"
                 />
                 <div className="mt-auto text-sm text-muted-foreground">
-                    © 2024 Telecom P&L System. All rights reserved.
+                    © {new Date().getFullYear()} Alan Dick & Company. All rights reserved.
                 </div>
             </div>
 
@@ -260,8 +257,7 @@ export default function Auth() {
                 <div className="mx-auto grid w-[380px] gap-6">
                     <div className="grid gap-4 text-center">
                         <div className="flex items-center justify-center gap-2 lg:hidden">
-                            <Building2 className="h-8 w-8" />
-                            <h1 className="text-2xl font-bold">Telecom P&L System</h1>
+                            <img src={alanDickLogo} alt="AlanDick Logo" className="h-12" />
                         </div>
                         {activeTab !== 'resetPassword' && (
                              <p className="text-balance text-muted-foreground">

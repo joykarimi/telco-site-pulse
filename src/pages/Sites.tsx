@@ -18,13 +18,19 @@ const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => currentYear + 1 - i);
 const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('default', { month: 'long' }) }));
 
+// Helper to safely convert values to numbers, defaulting to 0
+const ensureNumber = (value: any): number => {
+    const num = parseFloat(value);
+    return isNaN(num) ? 0 : num;
+};
+
 const SiteTable = ({ sites, fetchSites, handleDelete, selectedMonth, selectedYear }: { sites: CombinedSiteData[], fetchSites: (month: number, year: number) => void, handleDelete: (siteId: string) => void, selectedMonth: number, selectedYear: number }) => {
-    const getMonthlyValue = (site: CombinedSiteData, key: keyof SiteMonthlyData, defaultValue: number = 0) => {
+    const getMonthlyValue = (site: CombinedSiteData, key: keyof SiteMonthlyData) => {
         if (!site.monthlyData) {
-            return defaultValue;
+            return 0;
         }
         const value = site.monthlyData[key];
-        return typeof value === 'number' ? value : defaultValue;
+        return ensureNumber(value);
     };
     
     return (
@@ -169,10 +175,26 @@ export default function Sites() {
 
             const monthlyDataMap = new Map(monthlyData.map(m => [m.siteId, m]));
 
-            const combined: CombinedSiteData[] = siteDefinitions.map(def => ({
-                ...def,
-                monthlyData: monthlyDataMap.get(def.id) || null
-            }));
+            const combined: CombinedSiteData[] = siteDefinitions.map(def => {
+                const correspondingMonthlyData = monthlyDataMap.get(def.id);
+                
+                // Apply ensureNumber directly during data combination for all relevant fields
+                return {
+                    ...def,
+                    monthlyData: correspondingMonthlyData ? {
+                        ...correspondingMonthlyData,
+                        gridConsumption: ensureNumber(correspondingMonthlyData.gridConsumption),
+                        fuelConsumption: ensureNumber(correspondingMonthlyData.fuelConsumption),
+                        solarContribution: ensureNumber(correspondingMonthlyData.solarContribution),
+                        earningsSafaricom: ensureNumber(correspondingMonthlyData.earningsSafaricom),
+                        earningsAirtel: ensureNumber(correspondingMonthlyData.earningsAirtel),
+                        earningsJtl: ensureNumber(correspondingMonthlyData.earningsJtl),
+                        gridUnitCost: ensureNumber(correspondingMonthlyData.gridUnitCost),
+                        fuelUnitCost: ensureNumber(correspondingMonthlyData.fuelUnitCost),
+                        solarMaintenanceCost: ensureNumber(correspondingMonthlyData.solarMaintenanceCost),
+                    } : null,
+                }
+            });
 
             console.log('Combined Data:', combined);
 
@@ -233,23 +255,23 @@ export default function Sites() {
         const monthName = months.find(m => m.value === selectedMonth)?.name || '';
         const fileName = `Bill_for_${monthName}_${selectedYear}.xlsx`;
 
-        const getMonthlyValue = (site: CombinedSiteData, key: keyof SiteMonthlyData, defaultValue: number = 0) => {
+        const getMonthlyValueForExcel = (site: CombinedSiteData, key: keyof SiteMonthlyData) => {
             if (!site.monthlyData) {
-                return defaultValue;
+                return 0;
             }
             const value = site.monthlyData[key];
-            return typeof value === 'number' ? value : defaultValue;
+            return ensureNumber(value);
         };
         
         const dataForExcel = sitesToDisplay.map(site => {
-            const earningsSafaricom = getMonthlyValue(site, 'earningsSafaricom');
-            const earningsAirtel = getMonthlyValue(site, 'earningsAirtel');
-            const earningsJtl = getMonthlyValue(site, 'earningsJtl');
-            const gridConsumption = getMonthlyValue(site, 'gridConsumption');
-            const gridUnitCost = getMonthlyValue(site, 'gridUnitCost');
-            const fuelConsumption = getMonthlyValue(site, 'fuelConsumption');
-            const fuelUnitCost = getMonthlyValue(site, 'fuelUnitCost');
-            const solarMaintenanceCost = getMonthlyValue(site, 'solarMaintenanceCost');
+            const earningsSafaricom = getMonthlyValueForExcel(site, 'earningsSafaricom');
+            const earningsAirtel = getMonthlyValueForExcel(site, 'earningsAirtel');
+            const earningsJtl = getMonthlyValueForExcel(site, 'earningsJtl');
+            const gridConsumption = getMonthlyValueForExcel(site, 'gridConsumption');
+            const gridUnitCost = getMonthlyValueForExcel(site, 'gridUnitCost');
+            const fuelConsumption = getMonthlyValueForExcel(site, 'fuelConsumption');
+            const fuelUnitCost = getMonthlyValueForExcel(site, 'fuelUnitCost');
+            const solarMaintenanceCost = getMonthlyValueForExcel(site, 'solarMaintenanceCost');
 
             const totalEarnings = earningsSafaricom + earningsAirtel + earningsJtl;
             const gridExpense = gridConsumption * gridUnitCost;
@@ -290,19 +312,19 @@ export default function Sites() {
     }, [combinedSites, searchTerm]);
 
     const categorizedSites = useMemo(() => {
-        const getMonthlyValue = (site: CombinedSiteData, key: keyof SiteMonthlyData, defaultValue: number = 0) => {
+        const getCategorizedMonthlyValue = (site: CombinedSiteData, key: keyof SiteMonthlyData) => {
             if (!site.monthlyData) {
-                return defaultValue;
+                return 0;
             }
             const value = site.monthlyData[key];
-            return typeof value === 'number' ? value : defaultValue;
+            return ensureNumber(value);
         };
         const multiVendorSites: CombinedSiteData[] = [];
         const colocSites: CombinedSiteData[] = [];
         const singleOperatorSites: CombinedSiteData[] = [];
 
         filteredSites.forEach(site => {
-            const tenantCount = [getMonthlyValue(site, 'earningsSafaricom'), getMonthlyValue(site, 'earningsAirtel'), getMonthlyValue(site, 'earningsJtl')].filter(e => e > 0).length;
+            const tenantCount = [getCategorizedMonthlyValue(site, 'earningsSafaricom'), getCategorizedMonthlyValue(site, 'earningsAirtel'), getCategorizedMonthlyValue(site, 'earningsJtl')].filter(e => e > 0).length;
             if (tenantCount === 3) {
                 multiVendorSites.push(site);
             } else if (tenantCount === 2) {

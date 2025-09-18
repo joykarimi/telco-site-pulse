@@ -14,6 +14,7 @@ export interface Site {
   // Earnings
   safaricomIncome: number;
   airtelIncome: number;
+  jtlIncome: number; // Added JTL income
   
   // Consumption
   gridConsumption: number; // KWh

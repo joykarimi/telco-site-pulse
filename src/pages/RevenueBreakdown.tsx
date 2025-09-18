@@ -1,24 +1,19 @@
 
 import { useEffect, useState, useMemo } from "react";
-import Highcharts from 'highcharts';
-import HighchartsReact from 'highcharts-react-official';
-import highcharts3d from 'highcharts/highcharts-3d';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { getSiteDefinitions, getSiteMonthlyData, CombinedSiteData } from "@/lib/firebase/firestore";
+import { RevenueBreakdown as RevenueBreakdownComponent } from "@/components/dashboard/revenue-breakdown";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// Initialize the 3D module
-highcharts3d(Highcharts);
+import { Site } from "@/types/site"; // Import the Site interface
 
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('default', { month: 'long' }) }));
 
 export default function RevenueBreakdown() {
-    const [sites, setSites] = useState<CombinedSiteData[]>([]);
+    const [sites, setSites] = useState<Site[]>([]); // Use Site[] for the state
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedSiteType, setSelectedSiteType] = useState('All');
+    const [selectedSiteType, setSelectedSiteType] = useState('All'); // State for site type filter
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState(currentYear);
 
@@ -33,23 +28,23 @@ export default function RevenueBreakdown() {
 
                 const monthlyDataMap = new Map(monthlyData.map(d => [d.siteId, d]));
 
-                const combinedData = siteDefinitions.map(siteDef => {
+                const combinedData: Site[] = siteDefinitions.map(siteDef => {
                     const correspondingMonthlyData = monthlyDataMap.get(siteDef.id);
+                    
+                    // Map the fetched data to the Site interface expected by RevenueBreakdownComponent
                     return {
-                        ...siteDef,
-                        monthlyData: correspondingMonthlyData ? {
-                            month: correspondingMonthlyData.month,
-                            year: correspondingMonthlyData.year,
-                            gridConsumption: correspondingMonthlyData.gridConsumption,
-                            fuelConsumption: correspondingMonthlyData.fuelConsumption,
-                            solarContribution: correspondingMonthlyData.solarContribution,
-                            earningsSafaricom: correspondingMonthlyData.earningsSafaricom,
-                            earningsAirtel: correspondingMonthlyData.earningsAirtel,
-                            earningsJtl: correspondingMonthlyData.earningsJtl,
-                            gridUnitCost: correspondingMonthlyData.gridUnitCost,
-                            fuelUnitCost: correspondingMonthlyData.fuelUnitCost,
-                            solarMaintenanceCost: correspondingMonthlyData.solarMaintenanceCost,
-                        } : null,
+                        id: siteDef.id,
+                        name: siteDef.name,
+                        type: siteDef.type as Site['type'], // Type assertion
+                        safaricomIncome: correspondingMonthlyData?.earningsSafaricom ?? 0,
+                        airtelIncome: correspondingMonthlyData?.earningsAirtel ?? 0,
+                        jtlIncome: correspondingMonthlyData?.earningsJtl ?? 0, // Map JTL earnings
+                        gridConsumption: correspondingMonthlyData?.gridConsumption ?? 0,
+                        fuelConsumption: correspondingMonthlyData?.fuelConsumption ?? 0,
+                        solarContribution: parseFloat(correspondingMonthlyData?.solarContribution ?? '0'), // Convert to number
+                        gridCostPerKwh: correspondingMonthlyData?.gridUnitCost ?? 0,
+                        fuelCostPerLiter: correspondingMonthlyData?.fuelUnitCost ?? 0,
+                        solarMaintenanceCost: correspondingMonthlyData?.solarMaintenanceCost ?? 0,
                     };
                 });
 
@@ -65,109 +60,31 @@ export default function RevenueBreakdown() {
 
         fetchData();
     }, [selectedMonth, selectedYear]);
-
+    
+    // Filtering logic based on selectedSiteType
     const filteredSites = useMemo(() => sites.filter(site => {
+        const hasSafaricom = site.safaricomIncome > 0;
+        const hasAirtel = site.airtelIncome > 0;
+        const hasJtl = site.jtlIncome > 0;
+        const operatorCount = [hasSafaricom, hasAirtel, hasJtl].filter(Boolean).length;
+
         if (selectedSiteType === 'All') return true;
-        if (!site.monthlyData) return false;
-        const tenantCount = [site.monthlyData.earningsSafaricom, site.monthlyData.earningsAirtel, site.monthlyData.earningsJtl].filter(e => e > 0).length;
-        if (selectedSiteType === 'Single-Operator' && tenantCount === 1) return true;
-        if (selectedSiteType === 'Colocated' && tenantCount === 2) return true;
-        if (selectedSiteType === 'Multi-Vendor' && tenantCount === 3) return true;
+        if (selectedSiteType === 'Single-Operator' && operatorCount === 1) {
+            return (hasSafaricom && !hasAirtel && !hasJtl) ||
+                   (!hasSafaricom && hasAirtel && !hasJtl) ||
+                   (!hasSafaricom && !hasAirtel && hasJtl);
+        }
+        if (selectedSiteType === 'Colocated' && operatorCount === 2) {
+            return (hasSafaricom && hasAirtel && !hasJtl) ||
+                   (hasSafaricom && !hasAirtel && hasJtl) ||
+                   (!hasSafaricom && hasAirtel && hasJtl);
+        }
+        if (selectedSiteType === 'Multi-Vendor' && operatorCount === 3) {
+            return hasSafaricom && hasAirtel && hasJtl;
+        }
         return false;
     }), [sites, selectedSiteType]);
 
-    const totalRevenue = useMemo(() => filteredSites.reduce((acc, site) => acc + (site.monthlyData?.earningsSafaricom ?? 0) + (site.monthlyData?.earningsAirtel ?? 0) + (site.monthlyData?.earningsJtl ?? 0), 0), [filteredSites]);
-    
-    const revenueByTenant = useMemo(() => ({
-        safaricom: filteredSites.reduce((acc, site) => acc + (site.monthlyData?.earningsSafaricom ?? 0), 0),
-        airtel: filteredSites.reduce((acc, site) => acc + (site.monthlyData?.earningsAirtel ?? 0), 0),
-        jtl: filteredSites.reduce((acc, site) => acc + (site.monthlyData?.earningsJtl ?? 0), 0),
-    }), [filteredSites]);
-
-    const pieChartOptions = useMemo(() => ({
-        chart: {
-            type: 'pie',
-            options3d: {
-                enabled: true,
-                alpha: 45,
-                beta: 0
-            }
-        },
-        title: {
-            text: 'Revenue Distribution by Tenant'
-        },
-        tooltip: {
-            pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b>'
-        },
-        plotOptions: {
-            pie: {
-                allowPointSelect: true,
-                cursor: 'pointer',
-                depth: 35,
-                dataLabels: {
-                    enabled: true,
-                    format: '{point.name}'
-                }
-            }
-        },
-        series: [{
-            type: 'pie',
-            name: 'Revenue Share',
-            data: [
-                { name: 'Safaricom', y: revenueByTenant.safaricom },
-                { name: 'Airtel', y: revenueByTenant.airtel },
-                { name: 'JTL', y: revenueByTenant.jtl }
-            ].filter(item => item.y > 0)
-        }]
-    }), [revenueByTenant]);
-
-    const barChartOptions = useMemo(() => ({
-        chart: {
-            type: 'column',
-            options3d: {
-                enabled: true,
-                alpha: 15,
-                beta: 15,
-                depth: 50,
-                viewDistance: 25
-            }
-        },
-        title: {
-            text: 'Revenue by Tenant'
-        },
-        xAxis: {
-            categories: ['Safaricom', 'Airtel', 'JTL'],
-            labels: {
-                skew3d: true,
-                style: {
-                    fontSize: '16px'
-                }
-            }
-        },
-        yAxis: {
-            allowDecimals: false,
-            min: 0,
-            title: {
-                text: 'Revenue (KES)',
-                skew3d: true
-            }
-        },
-        tooltip: {
-            headerFormat: '<b>{point.key}</b><br>',
-            pointFormat: '<span style="color:{series.color}">●</span> {series.name}: {point.y}'
-        },
-        plotOptions: {
-            column: {
-                depth: 25
-            }
-        },
-        series: [{
-            type: 'column',
-            name: 'Revenue',
-            data: [revenueByTenant.safaricom, revenueByTenant.airtel, revenueByTenant.jtl]
-        }]
-    }), [revenueByTenant]);
-    
     const getMonthName = (monthNumber: number) => {
         return months.find(m => m.value === monthNumber)?.name || ''
     }
@@ -200,6 +117,7 @@ export default function RevenueBreakdown() {
                             ))}
                         </SelectContent>
                     </Select>
+                    {/* Site Type Filter */}
                     <Select onValueChange={setSelectedSiteType} defaultValue="All">
                         <SelectTrigger className="w-[200px]">
                             <SelectValue placeholder="Filter by site type" />
@@ -213,29 +131,7 @@ export default function RevenueBreakdown() {
                     </Select>
                 </div>
             </div>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Revenue by Tenant</CardTitle>
-                    <CardDescription>
-                        Total revenue of <strong>KES {totalRevenue.toFixed(2)}</strong> from {selectedSiteType.toLowerCase()} sites for {getMonthName(selectedMonth)} {selectedYear}.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {totalRevenue > 0 ? (
-                        <div className="grid md:grid-cols-2 gap-8">
-                            <div>
-                                <HighchartsReact highcharts={Highcharts} options={pieChartOptions} />
-                            </div>
-                            <div>
-                                <HighchartsReact highcharts={Highcharts} options={barChartOptions} />
-                            </div>
-                        </div>
-                    ) : (
-                        <p>No revenue data to display for the selected period.</p>
-                    )}
-                </CardContent>
-            </Card>
+            <RevenueBreakdownComponent sites={filteredSites} />{/* Pass filtered sites */} 
         </div>
     );
 }

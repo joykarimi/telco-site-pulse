@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./auth/AuthProvider";
 import AppRoutes from "./Routes";
 import { ThemeProvider } from "./components/theme-provider";
+import { NotificationProvider } from "./context/NotificationContext"; // Import NotificationProvider
 
 const queryClient = new QueryClient();
 
@@ -15,7 +16,9 @@ const App = () => (
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <AppRoutes />
+          <NotificationProvider> {/* Wrap AppRoutes with NotificationProvider */}
+            <AppRoutes />
+          </NotificationProvider>
         </AuthProvider>
       </TooltipProvider>
     </ThemeProvider>

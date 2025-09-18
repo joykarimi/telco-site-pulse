@@ -9,9 +9,10 @@ import {
 } from '../ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { useAuth } from '../../auth/AuthProvider';
-import { LogOut, Bell, Settings, Menu } from 'lucide-react';
+import { LogOut, Settings, Menu } from 'lucide-react';
 import { ModeToggle } from '../mode-toggle';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { NotificationDropdown } from './notification-dropdown'; // Corrected import
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, signOut, role } = useAuth();
@@ -52,10 +53,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
       <div className="flex flex-1 items-center gap-4 justify-end">
         <ModeToggle />
-        <Button variant="ghost" size="icon" className="rounded-full">
-          <Bell className="h-5 w-5" />
-          <span className="sr-only">Notifications</span>
-        </Button>
+        <NotificationDropdown /> {/* Corrected usage */}
         <Button variant="ghost" size="icon" className="rounded-full">
           <Settings className="h-5 w-5" />
            <span className="sr-only">Settings</span>

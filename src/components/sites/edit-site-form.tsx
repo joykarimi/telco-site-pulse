@@ -121,7 +121,7 @@ export function EditSiteForm({ site, onSiteUpdated, selectedMonth, selectedYear 
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="earningsSafaricom">Earnings from Safaricom</Label>
-                        <Input id="earningsSafaricom" type="number" value={earningsSafaricom} onChange={(e) => setEarningsSafaricom(e.g.target.value)} />
+                        <Input id="earningsSafaricom" type="number" value={earningsSafaricom} onChange={(e) => setEarningsSafaricom(e.target.value)} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="earningsAirtel">Earnings from Airtel</Label>

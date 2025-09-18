@@ -33,6 +33,22 @@ export async function getAssets(): Promise<Asset[]> {
     });
 }
 
+export async function getAsset(assetId: string): Promise<Asset | null> {
+    const docRef = doc(db, "assets", assetId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+            id: docSnap.id,
+            ...data,
+            purchaseDate: data.purchaseDate?.toDate(),
+            installationDate: data.installationDate?.toDate(),
+        } as Asset;
+    } else {
+        return null;
+    }
+}
+
 export async function addAsset(assetData: Omit<Asset, 'id' | 'site'> & { site?: string }): Promise<void> {
     await addDoc(collection(db, "assets"), { ...assetData, site: assetData.site || 'Unassigned' });
 }
@@ -167,15 +183,15 @@ export async function addMultipleSitesWithMonthlyData(sitesData: any[], month: n
             siteId,
             month,
             year,
-            earningsSafaricom: parseFloat(row.Safaricom || 0),
-            earningsAirtel: parseFloat(row.Airtel || 0),
-            earningsJtl: parseFloat(row.JTL || 0),
-            gridConsumption: parseFloat(row['Grid Expense'] || 0),
-            gridUnitCost: 1,
-            fuelConsumption: parseFloat(row['Fuel Expense'] || 0),
-            fuelUnitCost: 1,
-            solarMaintenanceCost: parseFloat(row['Solar Expense'] || 0),
-            solarContribution: '0'
+            earningsSafaricom: parseFloat(row.Safaricom && String(row.Safaricom).trim() !== '' ? row.Safaricom : '0'),
+            earningsAirtel: parseFloat(row.Airtel && String(row.Airtel).trim() !== '' ? row.Airtel : '0'),
+            earningsJtl: parseFloat(row.JTL && String(row.JTL).trim() !== '' ? row.JTL : '0'),
+            gridConsumption: parseFloat(row['Grid Expense'] && String(row['Grid Expense']).trim() !== '' ? row['Grid Expense'] : '0'),
+            gridUnitCost: parseFloat(row['Grid Unit Cost'] && String(row['Grid Unit Cost']).trim() !== '' ? row['Grid Unit Cost'] : '0'), // Assuming Grid Unit Cost is in Excel
+            fuelConsumption: parseFloat(row['Fuel Expense'] && String(row['Fuel Expense']).trim() !== '' ? row['Fuel Expense'] : '0'),
+            fuelUnitCost: parseFloat(row['Fuel Unit Cost'] && String(row['Fuel Unit Cost']).trim() !== '' ? row['Fuel Unit Cost'] : '0'), // Assuming Fuel Unit Cost is in Excel
+            solarMaintenanceCost: parseFloat(row['Solar Expense'] && String(row['Solar Expense']).trim() !== '' ? row['Solar Expense'] : '0'),
+            solarContribution: String(row['Solar Contribution'] && String(row['Solar Contribution']).trim() !== '' ? row['Solar Contribution'] : '0') // Keep as string or parse as needed
         });
     }
 
@@ -217,4 +233,78 @@ export async function deleteSiteDefinition(siteId: string): Promise<void> {
     });
 
     await batch.commit();
+}
+
+// User Management Interfaces and Functions
+export interface UserProfile {
+    uid: string;
+    email: string;
+    displayName: string;
+    role: 'admin' | 'maintenance_manager' | 'operations_manager' | 'viewer';
+}
+
+export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+    const docRef = doc(db, "userProfiles", uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as UserProfile;
+    } else {
+        return null;
+    }
+}
+
+export async function getUserProfiles(): Promise<UserProfile[]> {
+    const querySnapshot = await getDocs(collection(db, "userProfiles"));
+    return querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+}
+
+export async function getUserByRole(role: UserProfile['role']): Promise<UserProfile[]> {
+    const q = query(collection(db, "userProfiles"), where("role", "==", role));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+}
+
+
+// Notification Interfaces and Functions
+export type NotificationType = 'asset_movement_request' | 'asset_movement_approved' | 'asset_movement_rejected' | 'site_data_import_status';
+
+export interface Notification {
+  id: string;
+  userId: string; // The ID of the user who should receive the notification
+  type: NotificationType;
+  message: string;
+  link?: string; // Optional link to the relevant page
+  read: boolean;
+  timestamp: Date;
+  // Additional data specific to the notification type
+  assetId?: string;
+  fromSite?: string;
+  toSite?: string;
+  requestedBy?: string;
+  importMonth?: number;
+  importYear?: number;
+  importSuccess?: boolean;
+}
+
+export async function addNotification(notificationData: Omit<Notification, 'id' | 'timestamp' | 'read'> & { read?: boolean }): Promise<void> {
+    await addDoc(collection(db, "notifications"), {
+        ...notificationData,
+        read: notificationData.read ?? false,
+        timestamp: new Date(),
+    });
+}
+
+export async function getNotifications(userId: string): Promise<Notification[]> {
+    const q = query(collection(db, "notifications"), where("userId", "==", userId));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate(),
+    } as Notification));
+}
+
+export async function markNotificationAsRead(notificationId: string): Promise<void> {
+    const notificationRef = doc(db, "notifications", notificationId);
+    await updateDoc(notificationRef, { read: true });
 }

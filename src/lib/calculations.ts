@@ -1,20 +1,37 @@
 import { Site, SiteCalculations, CompanySummary } from '../types/site';
 
+// Helper function to ensure a value is a number, defaulting to 0 if null, undefined, or NaN
+function ensureNumber(value: any): number {
+  const num = Number(value);
+  return isNaN(num) ? 0 : num;
+}
+
 export function calculateSiteProfitLoss(site: Site): SiteCalculations {
-  const totalRevenue = site.safaricomIncome + site.airtelIncome;
+  const safaricomIncome = ensureNumber(site.safaricomIncome);
+  const airtelIncome = ensureNumber(site.airtelIncome);
+  const jtlIncome = ensureNumber(site.jtlIncome);
+
+  const totalRevenue = safaricomIncome + airtelIncome + jtlIncome;
   
   // Grid expense (reduced by solar contribution if applicable)
-  const effectiveGridConsumption = site.solarContribution > 0 
-    ? Math.max(0, site.gridConsumption - site.solarContribution)
-    : site.gridConsumption;
-  const gridExpense = effectiveGridConsumption * site.gridCostPerKwh;
+  const gridConsumption = ensureNumber(site.gridConsumption);
+  const solarContribution = ensureNumber(site.solarContribution);
+  const gridCostPerKwh = ensureNumber(site.gridCostPerKwh);
+
+  const effectiveGridConsumption = solarContribution > 0 
+    ? Math.max(0, gridConsumption - solarContribution)
+    : gridConsumption;
+  const gridExpense = effectiveGridConsumption * gridCostPerKwh;
   
   // Fuel expense
-  const fuelExpense = site.fuelConsumption * site.fuelCostPerLiter;
+  const fuelConsumption = ensureNumber(site.fuelConsumption);
+  const fuelCostPerLiter = ensureNumber(site.fuelCostPerLiter);
+  const fuelExpense = fuelConsumption * fuelCostPerLiter;
   
   // Solar maintenance expense (only if site has solar)
+  const solarMaintenanceCost = ensureNumber(site.solarMaintenanceCost);
   const solarExpense = ['grid-generator-solar', 'generator-solar', 'grid-solar'].includes(site.type)
-    ? site.solarMaintenanceCost
+    ? solarMaintenanceCost
     : 0;
   
   const totalExpense = gridExpense + fuelExpense + solarExpense;
@@ -36,11 +53,11 @@ export function calculateCompanySummary(sites: Site[]): CompanySummary {
   const summary = sites.reduce(
     (acc, site) => {
       const calculations = calculateSiteProfitLoss(site);
-      acc.totalRevenue += calculations.totalRevenue;
-      acc.totalExpense += calculations.totalExpense;
-      if (calculations.netProfitLoss > 0) {
+      acc.totalRevenue = ensureNumber(acc.totalRevenue) + ensureNumber(calculations.totalRevenue);
+      acc.totalExpense = ensureNumber(acc.totalExpense) + ensureNumber(calculations.totalExpense);
+      if (ensureNumber(calculations.netProfitLoss) > 0) {
         acc.profitableSites++;
-      } else if (calculations.netProfitLoss < 0) {
+      } else if (ensureNumber(calculations.netProfitLoss) < 0) {
         acc.lossMakingSites++;
       }
       return acc;
@@ -55,7 +72,7 @@ export function calculateCompanySummary(sites: Site[]): CompanySummary {
     }
   );
 
-  summary.netProfitLoss = summary.totalRevenue - summary.totalExpense;
+  summary.netProfitLoss = ensureNumber(summary.totalRevenue) - ensureNumber(summary.totalExpense);
   return summary;
 }
 
@@ -65,7 +82,7 @@ export function formatCurrency(amount: number): string {
     currency: 'KES',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(ensureNumber(amount));
 }
 
 export function getSiteTypeLabel(type: string): string {

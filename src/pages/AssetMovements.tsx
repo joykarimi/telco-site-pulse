@@ -6,10 +6,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NewMovementRequestForm } from "@/components/assets/asset-movement-requests";
-import { getAssetMovements, updateAssetMovementStatus, deleteAssetMovement, AssetMovement } from "@/lib/firebase/firestore";
+import { getAssetMovements, updateAssetMovementStatus, deleteAssetMovement, AssetMovement, getAsset, getUserByRole } from "@/lib/firebase/firestore";
 import { EditAssetMovementForm } from "@/components/asset-movements/edit-asset-movement-form";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
+import { useNotifications } from "@/context/NotificationContext";
 
 const statusVariant = {
   'Pending': 'default',
@@ -18,7 +19,8 @@ const statusVariant = {
 } as const;
 
 export default function AssetMovements() {
-  const { role } = useAuth();
+  const { user, role } = useAuth();
+  const { addNotification, refreshNotifications } = useNotifications();
   const canApprove = role === 'admin' || role === 'operations_manager' || role === 'maintenance_manager';
   const [movements, setMovements] = useState<AssetMovement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,10 +44,43 @@ export default function AssetMovements() {
     fetchMovements();
   }, []);
 
-  const handleUpdateStatus = async (id: string, status: 'Approved' | 'Rejected') => {
+  const handleNewMovementRequested = async () => {
+    await fetchMovements();
+    // Notify Admins and Operations Managers of a new request
+    const adminUsers = await getUserByRole('admin');
+    const opsManagers = await getUserByRole('operations_manager');
+    const maintenanceManagers = await getUserByRole('maintenance_manager');
+    const relevantUsers = [...adminUsers, ...opsManagers, ...maintenanceManagers];
+
+    relevantUsers.forEach(async (u) => {
+        const latestMovement = (await getAssetMovements()).sort((a,b) => (b.id > a.id ? 1 : -1))[0]; // Get the very last added movement
+        if (latestMovement) {
+          const asset = await getAsset(latestMovement.assetId);
+          addNotification(
+              `New asset movement request for ${asset?.serialNumber || latestMovement.assetId} from ${latestMovement.fromSite} to ${latestMovement.toSite}.`,
+              'info',
+              `/asset-movement-requests/${latestMovement.id}`, // Link to the request details
+              u.uid
+          );
+        }
+    });
+    refreshNotifications();
+  };
+
+  const handleUpdateStatus = async (movement: AssetMovement, status: 'Approved' | 'Rejected') => {
     try {
-        await updateAssetMovementStatus(id, status);
+        await updateAssetMovementStatus(movement.id, status);
         fetchMovements(); // Re-fetch to update the UI
+
+        // Notify the requester about the status update
+        const asset = await getAsset(movement.assetId);
+        addNotification(
+            `Your asset movement request for ${asset?.serialNumber || movement.assetId} to ${movement.toSite} has been ${status.toLowerCase()}.`,
+            status === 'Approved' ? 'success' : 'error',
+            `/asset-movement-requests/${movement.id}`, // Link to the request details
+            movement.requestedBy // Target the user who made the request
+        );
+        refreshNotifications();
     } catch (err) {
         alert(`Failed to ${status.toLowerCase()} request. Please try again.`);
         console.error(err);
@@ -56,6 +91,7 @@ export default function AssetMovements() {
     try {
         await deleteAssetMovement(movementId);
         fetchMovements();
+        refreshNotifications();
     } catch (err) {
         console.error("Error deleting asset movement: ", err);
     }
@@ -65,7 +101,7 @@ export default function AssetMovements() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">Asset Movements</h2>
-        <NewMovementRequestForm onMovementRequested={fetchMovements} />
+        <NewMovementRequestForm onMovementRequested={handleNewMovementRequested} />
       </div>
       <Card>
         <CardHeader>
@@ -103,8 +139,8 @@ export default function AssetMovements() {
                         <div className="flex justify-end items-center">
                             {canApprove && move.status === 'Pending' && (
                               <div className="space-x-2">
-                                <Button variant="destructive" size="sm" onClick={() => handleUpdateStatus(move.id, 'Rejected')}>Reject</Button>
-                                <Button size="sm" className="bg-green-500 hover:bg-green-600" onClick={() => handleUpdateStatus(move.id, 'Approved')}>Approve</Button>
+                                <Button variant="destructive" size="sm" onClick={() => handleUpdateStatus(move, 'Rejected')}>Reject</Button>
+                                <Button size="sm" className="bg-green-500 hover:bg-green-600" onClick={() => handleUpdateStatus(move, 'Approved')}>Approve</Button>
                               </div>
                             )}
                             <EditAssetMovementForm movement={move} onMovementUpdated={fetchMovements} />
