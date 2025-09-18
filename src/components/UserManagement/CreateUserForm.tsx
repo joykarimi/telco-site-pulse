@@ -7,10 +7,14 @@ import { useToast } from "@/components/ui/use-toast";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useForm, Controller } from "react-hook-form";
 import { motion } from 'framer-motion';
+import PhoneInput from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
+import '@/assets/css/phone-input.css';
 
 interface FormData {
   fullName: string;
   email: string;
+  phoneNumber: string;
   role: string;
 }
 
@@ -53,7 +57,7 @@ export default function CreateUserForm() {
         </CardHeader>
         <CardContent className="p-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="fullName">Full Name</Label>
                 <Input
@@ -72,6 +76,26 @@ export default function CreateUserForm() {
                   placeholder="e.g., john.doe@example.com"
                 />
                 {errors.email && <p className="text-red-500 text-xs pt-1">{errors.email.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phoneNumber">Phone Number</Label>
+                <Controller
+                  name="phoneNumber"
+                  control={control}
+                  rules={{ required: "Phone number is required" }}
+                  render={({ field }) => (
+                    <PhoneInput
+                      id="phoneNumber"
+                      placeholder="Enter phone number"
+                      value={field.value}
+                      onChange={field.onChange}
+                      defaultCountry="KE"
+                      international
+                      countryCallingCodeEditable={false}
+                    />
+                  )}
+                />
+                {errors.phoneNumber && <p className="text-red-500 text-xs pt-1">{errors.phoneNumber.message}</p>}
               </div>
             </div>
 

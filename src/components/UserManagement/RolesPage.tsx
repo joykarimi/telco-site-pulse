@@ -1,131 +1,203 @@
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
-import { db } from "@/firebase";
-import { useEffect, useState } from "react";
-import { motion } from 'framer-motion';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { db } from "@/firebase";
+import { collection, getDocs } from "firebase/firestore";
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { Users, Shield, Settings, User, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+
+export type UserRole = "admin" | "maintenance_manager" | "operations_manager" | "user";
 
 interface UserProfile {
   id: string;
   user_id: string;
   full_name: string;
-  email: string;
-  role: string;
-  created_at: any; // Firestore timestamp object
+  phoneNumber?: string;
+  role: UserRole;
+  created_at: any; // Firestore timestamp
 }
 
-const roleVariantMap: { [key: string]: "default" | "destructive" | "outline" | "secondary" } = {
-  admin: "destructive",
-  operations_manager: "secondary",
-  maintenance_manager: "outline",
-  user: "default",
+const roleIcons = {
+  admin: Shield,
+  maintenance_manager: Settings,
+  operations_manager: Users,
+  user: User,
 };
 
+const roleLabels = {
+  admin: "Admin",
+  maintenance_manager: "Maintenance Manager",
+  operations_manager: "Operations Manager",
+  user: "User",
+};
+
+const roleColors = {
+  admin: "destructive",
+  maintenance_manager: "default",
+  operations_manager: "secondary",
+  user: "outline",
+} as const;
+
 const functions = getFunctions();
+const manageUserRoleFn = httpsCallable(functions, 'manageUserRole');
 const deleteUserFn = httpsCallable(functions, 'deleteUser');
 
 export default function RolesPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    const q = query(collection(db, "profiles"), orderBy("created_at", "desc"));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const usersData: UserProfile[] = [];
-      querySnapshot.forEach((doc) => {
-        usersData.push({ id: doc.id, ...doc.data() } as UserProfile);
-      });
-      setUsers(usersData);
-    });
-
-    return () => unsubscribe();
+    fetchUsers();
   }, []);
 
-  const handleDeleteUser = async (userId: string) => {
+  const fetchUsers = async () => {
     try {
-      await deleteUserFn({ userId });
-      toast({ title: "Success", description: "User deleted successfully." });
+      const querySnapshot = await getDocs(collection(db, 'profiles'));
+      const usersData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as UserProfile[];
+      setUsers(usersData);
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Failed to fetch users",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return 'N/A';
-    return new Date(timestamp.seconds * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  }
+  const updateUserRole = async (userId: string, role: UserRole) => {
+    try {
+      await manageUserRoleFn({ userId, role });
+
+      toast({
+        title: "Success",
+        description: "User role updated successfully",
+      });
+
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user role",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    try {
+      await deleteUserFn({ userId });
+      toast({
+        title: "Success",
+        description: "User deleted successfully",
+      });
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: "easeOut" }}
-      className="max-w-7xl mx-auto"
-    >
-      <Card className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 shadow-lg rounded-2xl">
-        <CardHeader className="border-b border-slate-200 dark:border-slate-700/60">
-          <CardTitle className="text-2xl font-bold tracking-tight">User Roles</CardTitle>
-          <CardDescription className="text-slate-500 dark:text-slate-400">
-            A real-time list of all registered users and their assigned roles.
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-.primary" />
+            User Management
+          </CardTitle>
+          <CardDescription>
+            Manage user roles and permissions
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
             <Table>
               <TableHeader>
-                <TableRow className="border-b-0">
-                  <TableHead className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-300">Full Name</TableHead>
-                  <TableHead className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-300">Email</TableHead>
-                  <TableHead className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-300">Role</TableHead>
-                  <TableHead className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-300">Date Created</TableHead>
-                  <TableHead className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-300 text-right">Actions</TableHead>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id} className="border-t border-slate-200 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/20">
-                    <TableCell className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">{user.full_name}</TableCell>
-                    <TableCell className="px-6 py-4 text-slate-600 dark:text-slate-300">{user.email}</TableCell>
-                    <TableCell className="px-6 py-4">
-                      <Badge variant={roleVariantMap[user.role] || 'default'} className="capitalize">
-                        {user.role.replace(/_/g, ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="px-6 py-4 text-slate-600 dark:text-slate-300">{formatDate(user.created_at)}</TableCell>
-                    <TableCell className="px-6 py-4 text-right">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete the user and all associated data.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteUser(user.user_id)}>Delete</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {users.map((user) => {
+                  const RoleIcon = roleIcons[user.role];
+                  return (
+                    <TableRow key={user.id} className="hover:bg-accent/5 transition-colors">
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{user.full_name}</p>
+                           <p className="text-sm text-muted-foreground">{user.user_id}</p>
+                          <p className="text-sm text-muted-foreground">{user.phoneNumber}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={roleColors[user.role]} className="flex items-center gap-1 w-fit">
+                          <RoleIcon className="h-3 w-3" />
+                          {roleLabels[user.role]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(user.created_at.toDate()).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {(["user", "maintenance_manager", "operations_manager", "admin"] as UserRole[]).map((role) => (
+                            <Button
+                              key={role}
+                              variant={user.role === role ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => updateUserRole(user.user_id, role)}
+                              disabled={user.role === role}
+                              className="text-xs"
+                            >
+                              {roleLabels[role]}
+                            </Button>
+                          ))}
+                           <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="icon">
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This action cannot be undone. This will permanently delete the user and all associated data.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => deleteUser(user.user_id)}>Delete</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
-          </div>
+          )}
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,28 +9,65 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import towerImage from '@/assets/images/tower.jpg';
 import alanDickLogo from '@/assets/images/alandick_logo.png';
-import { getAuth, checkActionCode, confirmPasswordReset } from 'firebase/auth';
+import { getAuth, checkActionCode, confirmPasswordReset, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import PhoneInput from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
+import '@/assets/css/phone-input.css';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from "@/components/ui/input-otp"
 
 export default function Auth() {
     const [isLoading, setIsLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'signin' | 'signup' | 'resetPassword'>('signin');
+    // 'phone', 'email', or 'resetPassword'
+    const [authMode, setAuthMode] = useState<'phone' | 'email' | 'resetPassword'>('phone');
 
     const [signInForm, setSignInForm] = useState({ email: '', password: '' });
-    const [signUpForm, setSignUpForm] = useState({ email: '', password: '', fullName: '' });
     const [resetPasswordForm, setResetPasswordForm] = useState({ password: '', confirmPassword: '' });
+
+    // Phone auth state
+    const [phoneNumber, setPhoneNumber] = useState<string | undefined>('');
+    const [otp, setOtp] = useState('');
+    const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+    const [isOtpSent, setIsOtpSent] = useState(false);
 
     const [searchParams] = useSearchParams();
     const mode = searchParams.get('mode');
     const oobCode = searchParams.get('oobCode');
 
-    const { user, login, signUp, loading: authLoading } = useAuth();
+    const { user, login, loading: authLoading } = useAuth();
+    const auth = getAuth();
+    const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+    const recaptchaContainerRef = useRef<HTMLDivElement>(null);
+
+    // Initialize Recaptcha Verifier
+    useEffect(() => {
+        if (!recaptchaContainerRef.current) return;
+        if (recaptchaVerifierRef.current) return; // Already initialized
+
+        recaptchaVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
+            'size': 'invisible',
+            'callback': (response: any) => {
+                // reCAPTCHA solved, allow signInWithPhoneNumber.
+                console.log("Recaptcha verified");
+            },
+            'expired-callback': () => {
+                // Response expired. Ask user to solve reCAPTCHA again.
+                toast.error("Recaptcha expired. Please try again.");
+            }
+        });
+        recaptchaVerifierRef.current.render(); // Render the invisible reCAPTCHA
+    }, [auth]);
+
 
     useEffect(() => {
         if (mode === 'resetPassword' && oobCode) {
-            const auth = getAuth();
             checkActionCode(auth, oobCode)
                 .then(() => {
-                    setActiveTab('resetPassword');
+                    setAuthMode('resetPassword');
                 })
                 .catch((error) => {
                     toast.error("Invalid or expired password reset link.", {
@@ -39,7 +76,7 @@ export default function Auth() {
                     console.error("Invalid oobCode:", error);
                 });
         }
-    }, [mode, oobCode]);
+    }, [mode, oobCode, auth]);
 
 
     if (authLoading) {
@@ -54,7 +91,7 @@ export default function Auth() {
         return <Navigate to="/" replace />;
     }
 
-    const handleSignIn = async (e: React.FormEvent) => {
+    const handleEmailSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         try {
@@ -69,25 +106,53 @@ export default function Auth() {
             setIsLoading(false);
         }
     };
-
-    const handleSignUp = async (e: React.FormEvent) => {
+    
+    const handlePhoneSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!phoneNumber) {
+             toast.error("Please enter a valid phone number.");
+            return;
+        }
+        if (!recaptchaVerifierRef.current) {
+            toast.error("Recaptcha not initialized. Please wait or refresh the page.");
+            return;
+        }
         setIsLoading(true);
         try {
-            await signUp(signUpForm.email, signUpForm.password, signUpForm.fullName);
-            toast.success('Account created successfully!', {
-                description: 'You can now sign in with your new credentials.',
-            });
-            setActiveTab('signin'); // Switch to sign-in tab after successful sign-up
-        } catch (error: any) {
-            const message = error.code === 'auth/email-already-in-use'
-                ? 'This email is already registered. Please sign in.'
-                : 'An error occurred during sign-up. Please try again.';
-            toast.error(message);
+            const confirmation = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifierRef.current);
+            setConfirmationResult(confirmation);
+            setIsOtpSent(true);
+            toast.success('OTP sent successfully!');
+        } catch (error) {
+            console.error("Error sending OTP: ", error);
+            toast.error("Failed to send OTP. Check the phone number or try again.");
         } finally {
             setIsLoading(false);
         }
     };
+    
+    const handleOtpVerification = async () => {
+        if (!confirmationResult) {
+            toast.error("Verification failed. Please request a new OTP.");
+            return;
+        }
+        if (otp.length !== 6) {
+            toast.error("Please enter a 6-digit OTP.");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            await confirmationResult.confirm(otp);
+            toast.success('Signed in successfully!');
+            // onAuthStateChanged in AuthProvider will handle the redirect
+        } catch (error) {
+            console.error("Error verifying OTP: ", error);
+            toast.error("Invalid OTP. Please try again.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
 
     const handleResetPassword = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -102,12 +167,11 @@ export default function Auth() {
 
         setIsLoading(true);
         try {
-            const auth = getAuth();
             await confirmPasswordReset(auth, oobCode, resetPasswordForm.password);
             toast.success("Password has been reset successfully!", {
                 description: "You can now sign in with your new password.",
             });
-            setActiveTab("signin");
+            setAuthMode("email");
         } catch (error: any) {
             toast.error("Failed to reset password.", {
                 description: "The link may have expired. Please try resetting your password again.",
@@ -121,16 +185,67 @@ export default function Auth() {
 
 
     const renderActiveForm = () => {
-        switch (activeTab) {
-            case 'signin':
+        switch (authMode) {
+            case 'phone':
+                if (isOtpSent) {
+                    return (
+                        <div className="grid gap-4">
+                            <div className="grid gap-2 text-center">
+                                <h1 className="text-2xl font-bold">Enter OTP</h1>
+                                <p className="text-balance text-muted-foreground">
+                                    A 6-digit code was sent to your phone number.
+                                </p>
+                            </div>
+                            <InputOTP maxLength={6} value={otp} onChange={(value) => setOtp(value)}>
+                                <InputOTPGroup>
+                                    <InputOTPSlot index={0} />
+                                    <InputOTPSlot index={1} />
+                                    <InputOTPSlot index={2} />
+                                </InputOTPGroup>
+                                <InputOTPSeparator />
+                                <InputOTPGroup>
+                                    <InputOTPSlot index={3} />
+                                    <InputOTPSlot index={4} />
+                                    <InputOTPSlot index={5} />
+                                </InputOTPGroup>
+                            </InputOTP>
+                            <Button onClick={handleOtpVerification} className="w-full" disabled={isLoading}>
+                                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Verify OTP & Sign In'}
+                            </Button>
+                            <Button variant="link" size="sm" onClick={() => setIsOtpSent(false)} disabled={isLoading}>
+                                Back to phone number entry
+                            </Button>
+                        </div>
+                    );
+                }
                 return (
-                    <form onSubmit={handleSignIn} className="grid gap-4">
+                     <form onSubmit={handlePhoneSignIn} className="grid gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="phone-number">Phone Number</Label>
+                            <PhoneInput
+                                id="phone-number"
+                                placeholder="Enter phone number"
+                                value={phoneNumber}
+                                onChange={setPhoneNumber}
+                                defaultCountry="KE"
+                                international
+                                countryCallingCodeEditable={false}
+                            />
+                        </div>
+                        <Button type="submit" className="w-full" disabled={isLoading}>
+                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Send OTP'}
+                        </Button>
+                    </form>
+                );
+            case 'email':
+                return (
+                    <form onSubmit={handleEmailSignIn} className="grid gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="signin-email">Email</Label>
                             <Input
                                 id="signin-email"
                                 type="email"
-                                placeholder="m@example.com"
+                                placeholder="admin@example.com"
                                 value={signInForm.email}
                                 onChange={(e) => setSignInForm(prev => ({ ...prev, email: e.target.value }))}
                                 required
@@ -152,46 +267,6 @@ export default function Auth() {
                         </div>
                         <Button type="submit" className="w-full" disabled={isLoading}>
                             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Sign In'}
-                        </Button>
-                    </form>
-                );
-            case 'signup':
-                return (
-                    <form onSubmit={handleSignUp} className="grid gap-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="signup-name">Full Name</Label>
-                            <Input
-                                id="signup-name"
-                                placeholder="Max Robinson"
-                                value={signUpForm.fullName}
-                                onChange={(e) => setSignUpForm(prev => ({ ...prev, fullName: e.target.value }))}
-                                required
-                                disabled={isLoading} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="signup-email">Email</Label>
-                            <Input
-                                id="signup-email"
-                                type="email"
-                                placeholder="m@example.com"
-                                value={signUpForm.email}
-                                onChange={(e) => setSignUpForm(prev => ({ ...prev, email: e.target.value }))}
-                                required
-                                disabled={isLoading}
-                            />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="signup-password">Password</Label>
-                            <Input
-                                id="signup-password"
-                                type="password"
-                                value={signUpForm.password}
-                                onChange={(e) => setSignUpForm(prev => ({ ...prev, password: e.target.value }))}
-                                required
-                                disabled={isLoading} />
-                        </div>
-                        <Button type="submit" className="w-full" disabled={isLoading}>
-                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Create an Account'}
                         </Button>
                     </form>
                 );
@@ -233,6 +308,13 @@ export default function Auth() {
                 )
         }
     }
+    
+    const getTitle = () => {
+        if (authMode === 'resetPassword') return '';
+        if (authMode === 'email') return 'Admin Sign In';
+        if (isOtpSent) return '';
+        return 'User Sign In';
+    }
 
     return (
         <div className="w-full lg:grid lg:min-h-screen lg:grid-cols-2">
@@ -254,27 +336,41 @@ export default function Auth() {
 
             {/* Right Auth Form Column */}
             <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+                 <div id="recaptcha-container" ref={recaptchaContainerRef}></div>
                 <div className="mx-auto grid w-[380px] gap-6">
                     <div className="grid gap-4 text-center">
                         <div className="flex items-center justify-center gap-2 lg:hidden">
                             <img src={alanDickLogo} alt="AlanDick Logo" className="h-12" />
                         </div>
-                        {activeTab !== 'resetPassword' && (
+                        <h1 className="text-3xl font-bold">{getTitle()}</h1>
+                        {authMode !== 'resetPassword' && (
                              <p className="text-balance text-muted-foreground">
                                 Enter your details below to access your dashboard
                             </p>
                         )}
                     </div>
 
-                    {activeTab !== 'resetPassword' && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <Button variant={activeTab === 'signin' ? 'default' : 'outline'} onClick={() => setActiveTab('signin')}>Sign In</Button>
-                            <Button variant={activeTab === 'signup' ? 'default' : 'outline'} onClick={() => setActiveTab('signup')}>Sign Up</Button>
-                        </div>
-                    )}
-
                     {renderActiveForm()}
 
+                    {authMode !== 'resetPassword' && (
+                        <div className="mt-4 text-center text-sm">
+                            {authMode === 'phone' ? (
+                                <>
+                                    Are you an administrator?{' '}
+                                    <Button variant="link" onClick={() => setAuthMode('email')} className="p-0 h-auto">
+                                        Sign in with email
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    Are you a user?{' '}
+                                     <Button variant="link" onClick={() => setAuthMode('phone')} className="p-0 h-auto">
+                                        Sign in with phone
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
