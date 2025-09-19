@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import {
     onAuthStateChanged,
     getIdTokenResult,
@@ -38,7 +38,6 @@ export const usePermissions = () => {
     return { hasPermission, role, loading };
 };
 
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [role, setRole] = useState<UserRole | undefined>();
@@ -69,30 +68,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return () => unsubscribe();
     }, []);
 
-    const login = async (email: string, pass: string) => {
+    const login = useCallback(async (email: string, pass: string) => {
         await signInWithEmailAndPassword(auth, email, pass);
-    };
+    }, []);
 
-    const signUp = async (email: string, pass: string, fullName: string) => {
+    const signUp = useCallback(async (email: string, pass: string, fullName: string) => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         await updateProfile(userCredential.user, { displayName: fullName });
         // After sign-up, you might want to trigger a function to set custom claims (e.g., role)
         // This is usually done from a backend/serverless function for security.
         // For now, onAuthStateChanged will pick up the new user.
-    };
+    }, []);
 
-    const signOut = async () => {
+    const signOut = useCallback(async () => {
         await firebaseSignOut(auth);
-    };
+    }, []);
 
-    const hasPermission = (permission: string): boolean => {
+    const hasPermission = useCallback((permission: string): boolean => {
         if (!role) {
             return false;
         }
         return checkPermission(role, permission);
-    };
+    }, [role]);
 
-    const value = { user, role, loading, login, signUp, signOut, hasPermission };
+    const value = useMemo(() => ({
+        user,
+        role,
+        loading,
+        login,
+        signUp,
+        signOut,
+        hasPermission
+    }), [user, role, loading, login, signUp, signOut, hasPermission]);
 
     return (
         <AuthContext.Provider value={value}>

@@ -29,6 +29,14 @@ export default defineConfig(({ mode }) => ({
           lucide: ['lucide-react'],
         },
       },
+      treeshake: {
+        moduleSideEffects: (id) => {
+          if (id.includes('firebase')) {
+            return false;
+          }
+          return true;
+        }
+      }
     },
   },
 }));

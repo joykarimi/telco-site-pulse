@@ -1,9 +1,10 @@
 
-import { useEffect, useState, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom"; // Import useNavigate
+import { useCallback, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom"; 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getSiteDefinitions, getSiteMonthlyData, CombinedSiteData, SiteMonthlyData } from "@/lib/firebase/firestore";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell } from 'recharts';
+import { useDataFetching } from "@/hooks/use-data-fetching";
 
 const currentYear = new Date().getFullYear();
 const currentMonth = new Date().getMonth() + 1;
@@ -35,62 +36,45 @@ const formatLargeCurrency = (value: number) => {
 };
 
 export default function Dashboard() {
-    const [combinedSites, setCombinedSites] = useState<CombinedSiteData[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate(); // Initialize useNavigate
 
-    useEffect(() => {
-        const fetchSitesAndCombineData = async () => {
-            try {
-                setLoading(true);
-                const [siteDefinitions, monthlyData] = await Promise.all([
-                    getSiteDefinitions(),
-                    getSiteMonthlyData(currentMonth, currentYear)
-                ]);
+    const fetchCombinedData = useCallback(async () => {
+        const [siteDefinitions, monthlyData] = await Promise.all([
+            getSiteDefinitions(),
+            getSiteMonthlyData(currentMonth, currentYear)
+        ]);
 
-                const monthlyDataMap = new Map(monthlyData.map(m => [m.siteId, m]));
+        const monthlyDataMap = new Map(monthlyData.map(m => [m.siteId, m]));
 
-                const combined: CombinedSiteData[] = siteDefinitions.map(def => {
-                    const correspondingMonthlyData = monthlyDataMap.get(def.id); 
-                    
-                    return {
-                        ...def,
-                        monthlyData: correspondingMonthlyData ? {
-                            ...correspondingMonthlyData,
-                            gridConsumption: ensureNumber(correspondingMonthlyData.gridConsumption),
-                            fuelConsumption: ensureNumber(correspondingMonthlyData.fuelConsumption),
-                            solarContribution: ensureNumber(correspondingMonthlyData.solarContribution),
-                            earningsSafaricom: ensureNumber(correspondingMonthlyData.earningsSafaricom),
-                            earningsAirtel: ensureNumber(correspondingMonthlyData.earningsAirtel),
-                            earningsJtl: ensureNumber(correspondingMonthlyData.earningsJtl),
-                            gridUnitCost: ensureNumber(correspondingMonthlyData.gridUnitCost),
-                            fuelUnitCost: ensureNumber(correspondingMonthlyData.fuelUnitCost),
-                            solarMaintenanceCost: ensureNumber(correspondingMonthlyData.solarMaintenanceCost),
-                        } : null,
-                    }
-                });
-
-                setCombinedSites(combined);
-                setError(null);
-            } catch (err) {
-                setError("Failed to fetch site data. Please try again later.");
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchSitesAndCombineData();
+        return siteDefinitions.map(def => {
+            const correspondingMonthlyData = monthlyDataMap.get(def.id);
+            return {
+                ...def,
+                monthlyData: correspondingMonthlyData ? {
+                    ...correspondingMonthlyData,
+                    gridConsumption: ensureNumber(correspondingMonthlyData.gridConsumption),
+                    fuelConsumption: ensureNumber(correspondingMonthlyData.fuelConsumption),
+                    solarContribution: ensureNumber(correspondingMonthlyData.solarContribution),
+                    earningsSafaricom: ensureNumber(correspondingMonthlyData.earningsSafaricom),
+                    earningsAirtel: ensureNumber(correspondingMonthlyData.earningsAirtel),
+                    earningsJtl: ensureNumber(correspondingMonthlyData.earningsJtl),
+                    gridUnitCost: ensureNumber(correspondingMonthlyData.gridUnitCost),
+                    fuelUnitCost: ensureNumber(correspondingMonthlyData.fuelUnitCost),
+                    solarMaintenanceCost: ensureNumber(correspondingMonthlyData.solarMaintenanceCost),
+                } : null,
+            };
+        });
     }, []);
 
-    const getMonthlyValue = (site: CombinedSiteData, key: keyof SiteMonthlyData) => {
+    const { data: combinedSites, loading, error } = useDataFetching(fetchCombinedData);
+
+    const getMonthlyValue = useCallback((site: CombinedSiteData, key: keyof SiteMonthlyData) => {
         if (!site.monthlyData) return 0;
         return ensureNumber(site.monthlyData[key]);
-    };
+    }, []);
 
     const dashboardData = useMemo(() => {
-        if (!combinedSites.length) return null;
+        if (!combinedSites || !combinedSites.length) return null;
 
         const totalEarnings = combinedSites.reduce((acc, site) => 
             acc + getMonthlyValue(site, 'earningsSafaricom') + 
@@ -138,7 +122,7 @@ export default function Dashboard() {
             mostProfitableSites: siteProfitability.slice(0, 5),
             leastProfitableSites: siteProfitability.slice(-5).reverse(),
         }
-    }, [combinedSites]);
+    }, [combinedSites, getMonthlyValue]);
 
     if (loading) return <p>Loading dashboard for {new Date(0, currentMonth - 1).toLocaleString('default', { month: 'long' })} {currentYear}...</p>;
     if (error) return <p className="text-destructive">{error}</p>;

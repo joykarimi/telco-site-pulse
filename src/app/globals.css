@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -60,17 +61,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-  }
-  
-  .card {
-    backdrop-filter: blur(10px);
-    background-color: rgba(255, 255, 255, 0.5);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-
-  [data-sidebar="sidebar"] {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    @apply bg-gray-800 text-foreground;
   }
 }
 

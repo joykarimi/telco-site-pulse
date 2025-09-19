@@ -6,23 +6,26 @@ import { AuthProvider } from "./auth/AuthProvider";
 import AppRoutes from "./Routes";
 import { ThemeProvider } from "./components/theme-provider";
 import { NotificationProvider } from "./context/NotificationContext"; // Import NotificationProvider
+import { useMemo } from "react";
 
-const queryClient = new QueryClient();
+const App = () => {
+  const queryClient = useMemo(() => new QueryClient(), []);
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <AuthProvider>
-          <NotificationProvider> {/* Wrap AppRoutes with NotificationProvider */}
-            <AppRoutes />
-          </NotificationProvider>
-        </AuthProvider>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <AuthProvider>
+            <NotificationProvider> {/* Wrap AppRoutes with NotificationProvider */}
+              <AppRoutes />
+            </NotificationProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

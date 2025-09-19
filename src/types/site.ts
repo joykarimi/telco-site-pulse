@@ -1,10 +1,13 @@
-export type SiteType = 
-  | 'grid-only'
-  | 'grid-generator'
-  | 'grid-generator-solar'
-  | 'generator-only'
-  | 'generator-solar'
-  | 'grid-solar';
+export const siteTypes = [
+  'grid-only',
+  'grid-generator',
+  'grid-generator-solar',
+  'generator-only',
+  'generator-solar',
+  'grid-solar',
+] as const;
+
+export type SiteType = typeof siteTypes[number];
 
 export interface Site {
   id: string;

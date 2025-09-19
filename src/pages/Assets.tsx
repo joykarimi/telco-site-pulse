@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Trash2, Search } from "lucide-react";
 import { AddAssetToSiteForm } from "@/components/assets/add-asset-to-site-form";
+import { useDataFetching } from "@/hooks/use-data-fetching";
 
 const statusVariant = {
   'Active': 'success',
@@ -22,52 +23,39 @@ const statusVariant = {
 export default function Assets() {
   const { role } = useAuth();
   const canManageAssets = role === 'admin' || role === 'maintenance_manager';
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [sites, setSites] = useState<SiteDefinition[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [assetsData, sitesData] = await Promise.all([getAssets(), getSiteDefinitions()]);
-      setAssets(assetsData);
-      setSites(sitesData);
-      setError(null);
-    } catch (err) {
-      setError("Failed to fetch data. Please try again later.");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchPageData = useCallback(async () => {
+    const [assets, sites] = await Promise.all([getAssets(), getSiteDefinitions()]);
+    return { assets, sites };
+  }, []);
 
-  const handleDeleteAllAssets = async () => {
+  const { data, loading, error, refetch } = useDataFetching(fetchPageData);
+
+  const assets = data?.assets || [];
+  const sites = data?.sites || [];
+
+  const handleDeleteAllAssets = useCallback(async () => {
     if (window.confirm("Are you sure you want to delete all assets? This action cannot be undone.")) {
         try {
             await deleteAllAssets();
-            fetchData();
+            refetch();
         } catch (err) {
             console.error("Error deleting all assets: ", err);
-            setError("Failed to delete all assets.");
+            // You could show a toast notification here
         }
     }
-  };
+  }, [refetch]);
 
-  const handleDelete = async (assetId: string) => {
+  const handleDelete = useCallback(async (assetId: string) => {
     try {
         await deleteAsset(assetId);
-        fetchData(); // Refresh the list after deletion
+        refetch(); // Refresh the list after deletion
     } catch (err) {
         console.error("Error deleting asset: ", err);
         // Optionally, show an error message to the user
     }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  }, [refetch]);
 
   const filteredAssets = useMemo(() => {
     return assets.filter(asset => 
@@ -109,7 +97,7 @@ export default function Assets() {
         <div className="flex items-center justify-between space-y-2">
             <h2 className="text-3xl font-bold tracking-tight">Asset Management</h2>
             <div className="flex items-center space-x-2">
-                {canManageAssets && <AddAssetForm onAssetAdded={fetchData} sites={sites} />}
+                {canManageAssets && <AddAssetForm onAssetAdded={refetch} sites={sites} />}
                 {canManageAssets && <Button variant="destructive" onClick={handleDeleteAllAssets}>Delete All Assets</Button>}
             </div>
         </div>
@@ -142,7 +130,7 @@ export default function Assets() {
                         <Card key={siteName}>
                             <CardHeader className="flex flex-row items-center justify-between">
                                 <CardTitle>{siteName}</CardTitle>
-                                {canManageAssets && site && <AddAssetToSiteForm site={site} onAssetAdded={fetchData} />}
+                                {canManageAssets && site && <AddAssetToSiteForm site={site} onAssetAdded={refetch} />}
                             </CardHeader>
                             <CardContent>
                             {siteAssets.length > 0 ? (
@@ -168,7 +156,7 @@ export default function Assets() {
                                                 {canManageAssets && (
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end items-center">
-                                                            <EditAssetForm asset={asset} onAssetUpdated={fetchData} sites={sites} />
+                                                            <EditAssetForm asset={asset} onAssetUpdated={refetch} sites={sites} />
                                                             <AlertDialog>
                                                                 <AlertDialogTrigger asChild>
                                                                     <Button variant="ghost" size="icon">
