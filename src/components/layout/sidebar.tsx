@@ -8,7 +8,6 @@ import {
   Users,
   Briefcase,
   Settings,
-  LogOut,
   ChevronLeft,
   Menu,
   Home,
@@ -191,9 +190,6 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div className="px-4 pb-4">
-        <NavItem href="/logout" icon={LogOut} label="Logout" isCollapsed={isCollapsed && !isMobile} />
-      </div>
     </div>
   )
 

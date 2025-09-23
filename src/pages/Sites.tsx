@@ -123,6 +123,51 @@ export default function Sites() {
         fileInputRef.current?.click();
     }, []);
 
+    const filteredSites = useMemo(() => {
+      if (!combinedSites) return [];
+        return combinedSites.filter(site =>
+            site.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            site.type.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [combinedSites, searchTerm]);
+
+    const categorizedSites = useMemo(() => {
+        const getCategorizedMonthlyValue = (site: CombinedSiteData, key: keyof SiteMonthlyData) => {
+            if (!site.monthlyData) {
+                return 0;
+            }
+            const value = site.monthlyData[key];
+            return ensureNumber(value);
+        };
+        const multiVendorSites: CombinedSiteData[] = [];
+        const colocSites: CombinedSiteData[] = [];
+        const singleOperatorSites: CombinedSiteData[] = [];
+
+        filteredSites.forEach(site => {
+            const tenantCount = [getCategorizedMonthlyValue(site, 'earningsSafaricom'), getCategorizedMonthlyValue(site, 'earningsAirtel'), getCategorizedMonthlyValue(site, 'earningsJtl')].filter(e => e > 0).length;
+            if (tenantCount === 3) {
+                multiVendorSites.push(site);
+            } else if (tenantCount === 2) {
+                colocSites.push(site);
+            } else {
+                singleOperatorSites.push(site);
+            }
+        });
+
+        return {
+            "Multi-Vendor Sites": multiVendorSites,
+            "Coloc Sites": colocSites,
+            "Single-Operator Sites": singleOperatorSites,
+        };
+    }, [filteredSites]);
+
+    const sitesToDisplay = useMemo(() => {
+        if (selectedCategory === "All") {
+            return filteredSites;
+        }
+        return categorizedSites[selectedCategory as keyof typeof categorizedSites] || [];
+    }, [selectedCategory, filteredSites, categorizedSites]);
+
     const handleDownloadExcel = useCallback(() => {
         const monthName = months.find(m => m.value === selectedMonth)?.name || '';
         const fileName = `Bill_for_${monthName}_${selectedYear}.xlsx`;
@@ -171,51 +216,6 @@ export default function Sites() {
         utils.book_append_sheet(workbook, worksheet, "Site Financials");
         writeFile(workbook, fileName);
     }, [sitesToDisplay, selectedMonth, selectedYear]);
-
-    const filteredSites = useMemo(() => {
-      if (!combinedSites) return [];
-        return combinedSites.filter(site =>
-            site.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            site.type.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [combinedSites, searchTerm]);
-
-    const categorizedSites = useMemo(() => {
-        const getCategorizedMonthlyValue = (site: CombinedSiteData, key: keyof SiteMonthlyData) => {
-            if (!site.monthlyData) {
-                return 0;
-            }
-            const value = site.monthlyData[key];
-            return ensureNumber(value);
-        };
-        const multiVendorSites: CombinedSiteData[] = [];
-        const colocSites: CombinedSiteData[] = [];
-        const singleOperatorSites: CombinedSiteData[] = [];
-
-        filteredSites.forEach(site => {
-            const tenantCount = [getCategorizedMonthlyValue(site, 'earningsSafaricom'), getCategorizedMonthlyValue(site, 'earningsAirtel'), getCategorizedMonthlyValue(site, 'earningsJtl')].filter(e => e > 0).length;
-            if (tenantCount === 3) {
-                multiVendorSites.push(site);
-            } else if (tenantCount === 2) {
-                colocSites.push(site);
-            } else {
-                singleOperatorSites.push(site);
-            }
-        });
-
-        return {
-            "Multi-Vendor Sites": multiVendorSites,
-            "Coloc Sites": colocSites,
-            "Single-Operator Sites": singleOperatorSites,
-        };
-    }, [filteredSites]);
-
-    const sitesToDisplay = useMemo(() => {
-        if (selectedCategory === "All") {
-            return filteredSites;
-        }
-        return categorizedSites[selectedCategory as keyof typeof categorizedSites] || [];
-    }, [selectedCategory, filteredSites, categorizedSites]);
 
     const getDescription = useCallback(() => {
         const monthName = months.find(m => m.value === selectedMonth)?.name || '';

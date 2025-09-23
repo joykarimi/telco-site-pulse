@@ -8,7 +8,6 @@ import { useAuth } from '@/auth/AuthProvider';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import towerImage from '@/assets/images/tower.jpg';
-import alanDickLogo from '@/assets/images/alandick_logo.png';
 import { getAuth, checkActionCode, confirmPasswordReset, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
@@ -320,7 +319,6 @@ export default function Auth() {
         <div className="w-full lg:grid lg:min-h-screen lg:grid-cols-2">
             {/* Left Branding Column */}
             <div className="hidden bg-muted lg:flex lg:flex-col items-center justify-center p-8 border-r">
-                <img src={alanDickLogo} alt="AlanDick Logo" className="h-20" />
                 <p className="text-center text-lg mt-4 max-w-md">
                     Your centralized hub for managing telecommunication sites, assets, and profitability with precision and foresight.
                 </p>
@@ -339,9 +337,6 @@ export default function Auth() {
                  <div id="recaptcha-container" ref={recaptchaContainerRef}></div>
                 <div className="mx-auto grid w-[380px] gap-6">
                     <div className="grid gap-4 text-center">
-                        <div className="flex items-center justify-center gap-2 lg:hidden">
-                            <img src={alanDickLogo} alt="AlanDick Logo" className="h-12" />
-                        </div>
                         <h1 className="text-3xl font-bold">{getTitle()}</h1>
                         {authMode !== 'resetPassword' && (
                              <p className="text-balance text-muted-foreground">
