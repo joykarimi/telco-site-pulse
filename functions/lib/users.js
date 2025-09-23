@@ -1,74 +1,136 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createUserWithRole = void 0;
-const functions = require("firebase-functions");
+exports.deleteUser = exports.manageUserRole = exports.listUsers = exports.createUser = void 0;
+const https_1 = require("firebase-functions/v2/https");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
-const uuid_1 = require("uuid");
-exports.createUserWithRole = functions.https.onCall(async (data, context) => {
-    var _a, _b, _c;
+// Define CORS options to allow requests from any origin.
+// This is safe for onCall functions because they are protected by authentication checks.
+const corsOptions = { cors: true };
+/**
+ * Creates a new user in Firebase Authentication and a corresponding user
+ * document in Firestore.
+ */
+exports.createUser = (0, https_1.onCall)(corsOptions, async (request) => {
     const auth = (0, auth_1.getAuth)();
     const firestore = (0, firestore_1.getFirestore)();
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "Authentication is required.");
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication is required.");
     }
-    const callerRole = context.auth.token.role;
-    if (callerRole !== "admin") {
-        throw new functions.https.HttpsError("permission-denied", "Only admins can create new users.");
+    if (request.auth.token.role !== "admin") {
+        throw new https_1.HttpsError("permission-denied", "Only administrators can create users.");
     }
-    const email = (_a = data === null || data === void 0 ? void 0 : data.email) === null || _a === void 0 ? void 0 : _a.trim().toLowerCase();
-    const role = (data === null || data === void 0 ? void 0 : data.role) || "viewer";
-    const firstName = (_b = data === null || data === void 0 ? void 0 : data.firstName) === null || _b === void 0 ? void 0 : _b.trim();
-    const lastName = (_c = data === null || data === void 0 ? void 0 : data.lastName) === null || _c === void 0 ? void 0 : _c.trim();
-    if (!email || !role || !firstName || !lastName || !["admin", "operations_manager", "maintenance_manager", "viewer"].includes(role)) {
-        throw new functions.https.HttpsError("invalid-argument", "Valid 'email', 'role', 'firstName', and 'lastName' are required.");
+    const { email, role, firstName, lastName } = request.data;
+    if (!email || !role || !firstName || !lastName) {
+        throw new https_1.HttpsError("invalid-argument", "Required fields: email, role, firstName, lastName.");
     }
     const displayName = `${firstName} ${lastName}`;
-    let userRecord;
-    let temporaryPassword = null;
     try {
-        userRecord = await auth.getUserByEmail(email);
-        await auth.updateUser(userRecord.uid, { displayName });
+        const userRecord = await auth.createUser({ email, displayName });
+        await auth.setCustomUserClaims(userRecord.uid, { role });
+        await firestore.collection("users").doc(userRecord.uid).set({
+            uid: userRecord.uid,
+            email,
+            role,
+            firstName,
+            lastName,
+            displayName,
+            createdBy: request.auth.uid,
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        return { uid: userRecord.uid };
+    }
+    catch (err) {
+        console.error("Error creating user:", err);
+        if (err.code === 'auth/email-already-exists') {
+            throw new https_1.HttpsError("already-exists", "A user with this email address already exists.");
+        }
+        throw new https_1.HttpsError("internal", "An unexpected error occurred.");
+    }
+});
+/**
+ * Retrieves a list of all users from the Firestore 'users' collection.
+ * This function is restricted to admin users only.
+ */
+exports.listUsers = (0, https_1.onCall)(corsOptions, async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Authentication is required to perform this action.");
+    }
+    if (request.auth.token.role !== "admin") {
+        throw new https_1.HttpsError("permission-denied", "Only administrators can view user data.");
+    }
+    const firestore = (0, firestore_1.getFirestore)();
+    try {
+        const usersSnapshot = await firestore.collection("users").orderBy("createdAt", "desc").get();
+        const usersList = usersSnapshot.docs.map((doc) => {
+            var _a;
+            const data = doc.data();
+            const createdAt = ((_a = data.createdAt) === null || _a === void 0 ? void 0 : _a.toDate) ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+            return {
+                uid: doc.id,
+                displayName: data.displayName || "N/A",
+                email: data.email || "N/A",
+                role: data.role || "N/A",
+                createdAt: createdAt,
+            };
+        });
+        return { users: usersList };
+    }
+    catch (err) {
+        console.error("Error listing users:", err);
+        throw new https_1.HttpsError("internal", "An unexpected error occurred while fetching the user list.");
+    }
+});
+/**
+ * Updates a user's role (custom claim) in Firebase Auth and their user document in Firestore.
+ * This function is restricted to admin users only.
+ */
+exports.manageUserRole = (0, https_1.onCall)(corsOptions, async (request) => {
+    const auth = (0, auth_1.getAuth)();
+    const firestore = (0, firestore_1.getFirestore)();
+    if (!request.auth || request.auth.token.role !== 'admin') {
+        throw new https_1.HttpsError('permission-denied', 'Only administrators can manage user roles.');
+    }
+    const { uid, role } = request.data;
+    if (!uid || !role) {
+        throw new https_1.HttpsError('invalid-argument', 'The function must be called with "uid" and "role" arguments.');
+    }
+    try {
+        // Set the custom claim for the user's role
+        await auth.setCustomUserClaims(uid, { role });
+        // Update the role in the user's Firestore document
+        await firestore.collection('users').doc(uid).update({ role });
+        return { success: true, message: `Successfully updated role to ${role} for user ${uid}.` };
     }
     catch (error) {
-        if (error.code === "auth/user-not-found") {
-            temporaryPassword = (0, uuid_1.v4)().substring(0, 8);
-            userRecord = await auth.createUser({
-                email,
-                emailVerified: false,
-                password: temporaryPassword,
-                displayName,
-            });
-        }
-        else {
-            throw new functions.https.HttpsError("internal", "Error creating or fetching user.", error);
-        }
+        console.error("Error updating user role:", error);
+        throw new https_1.HttpsError('internal', 'An unexpected error occurred while updating the user role.', error.message);
     }
-    await auth.setCustomUserClaims(userRecord.uid, { role });
-    await firestore.doc(`users/${userRecord.uid}`).set({
-        email,
-        role,
-        firstName,
-        lastName,
-        displayName,
-        createdBy: context.auth.uid,
-        createdAt: firestore_1.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    // Conditionally build the response
-    const response = {
-        uid: userRecord.uid,
-        email,
-        role,
-        status: "success",
-        message: `User ${email} created/updated successfully.`
-    };
-    if (temporaryPassword) {
-        response.temporaryPassword = temporaryPassword;
-        response.message = `User ${email} created successfully. Please share the temporary password.`;
+});
+/**
+ * Deletes a user from Firebase Authentication and their corresponding document from Firestore.
+ * This function is restricted to admin users only.
+ */
+exports.deleteUser = (0, https_1.onCall)(corsOptions, async (request) => {
+    const auth = (0, auth_1.getAuth)();
+    const firestore = (0, firestore_1.getFirestore)();
+    if (!request.auth || request.auth.token.role !== 'admin') {
+        throw new https_1.HttpsError('permission-denied', 'Only administrators can delete users.');
     }
-    else {
-        response.message = `User ${email} already existed and has been updated.`;
+    const { uid } = request.data;
+    if (!uid) {
+        throw new https_1.HttpsError('invalid-argument', 'The function must be called with a "uid" argument.');
     }
-    return response;
+    try {
+        // Delete the user from Firebase Authentication
+        await auth.deleteUser(uid);
+        // Delete the user's document from Firestore
+        await firestore.collection('users').doc(uid).delete();
+        return { success: true, message: `Successfully deleted user ${uid}.` };
+    }
+    catch (error) {
+        console.error("Error deleting user:", error);
+        throw new https_1.HttpsError('internal', 'An unexpected error occurred while deleting the user.', error.message);
+    }
 });
 //# sourceMappingURL=users.js.map

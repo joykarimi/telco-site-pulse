@@ -3,47 +3,33 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
-/**
- * Creates a new user in Firebase Authentication and a corresponding profile
- * document in Firestore. This function can only be called by an authenticated admin.
- * It does not set a password, intending for the user to set their own via a
- * password reset email flow.
- */
-export const createUser = onCall(async (request) => {
+const corsOptions = { cors: true };
+
+export const createUser = onCall(corsOptions, async (request) => {
   const auth = getAuth();
   const firestore = getFirestore();
 
-  // 1. Authentication check: Ensure the user is signed in.
   if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Authentication is required to perform this action.");
+    throw new HttpsError("unauthenticated", "Authentication is required.");
   }
 
-  // 2. Authorization check: Ensure the caller is an admin.
-  const callerRole = request.auth.token.role;
-  if (callerRole !== "admin") {
-    throw new HttpsError("permission-denied", "Only administrators can create new users.");
+  if (request.auth.token.role !== "admin") {
+    throw new HttpsError("permission-denied", "Only administrators can create users.");
   }
 
-  // 3. Validate input data from the client.
   const { email, role, firstName, lastName } = request.data;
   if (!email || !role || !firstName || !lastName) {
-    throw new HttpsError("invalid-argument", "The function must be called with 'email', 'role', 'firstName', and 'lastName' arguments.");
+    throw new HttpsError("invalid-argument", "Required fields: email, role, firstName, lastName.");
   }
+
   const displayName = `${firstName} ${lastName}`;
 
   try {
-    // 4. Create the user in Firebase Auth without a password.
-    const userRecord = await auth.createUser({
-      email,
-      displayName,
-    });
-
-    // 5. Set a custom claim for the user's role for access control.
+    const userRecord = await auth.createUser({ email, displayName });
     await auth.setCustomUserClaims(userRecord.uid, { role });
 
-    // 6. Create a user profile document in the 'profiles' collection in Firestore.
-    await firestore.collection("profiles").doc(userRecord.uid).set({
-      user_id: userRecord.uid,
+    await firestore.collection("users").doc(userRecord.uid).set({
+      uid: userRecord.uid,
       email,
       role,
       firstName,
@@ -53,18 +39,98 @@ export const createUser = onCall(async (request) => {
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    // 7. Return the new user's UID on success.
-    return { uid: userRecord.uid };
+    // This was the missing piece. It triggers the password reset email.
+    await auth.generatePasswordResetLink(email);
 
+    return { uid: userRecord.uid };
   } catch (err: any) {
     console.error("Error creating user:", err);
-
-    // Provide a specific error message if the email is already in use.
     if (err.code === 'auth/email-already-exists') {
-        throw new HttpsError("already-exists", "A user with this email address already exists.");
+      throw new HttpsError("already-exists", "A user with this email address already exists.");
+    }
+    throw new HttpsError("internal", "An unexpected error occurred.");
+  }
+});
+
+export const listUsers = onCall(corsOptions, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication is required to perform this action.");
+  }
+
+  if (request.auth.token.role !== "admin") {
+    throw new HttpsError("permission-denied", "Only administrators can view user data.");
+  }
+
+  const firestore = getFirestore();
+
+  try {
+    const usersSnapshot = await firestore.collection("users").orderBy("createdAt", "desc").get();
+    
+    const usersList = usersSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+      
+      return {
+        uid: doc.id,
+        displayName: data.displayName || "N/A",
+        email: data.email || "N/A",
+        role: data.role || "N/A",
+        createdAt: createdAt,
+      };
+    });
+
+    return { users: usersList };
+
+  } catch (err: any) {
+    console.error("Error listing users:", err);
+    throw new HttpsError("internal", "An unexpected error occurred while fetching the user list.");
+  }
+});
+
+export const manageUserRole = onCall(corsOptions, async (request) => {
+    const auth = getAuth();
+    const firestore = getFirestore();
+
+    if (!request.auth || request.auth.token.role !== 'admin') {
+        throw new HttpsError('permission-denied', 'Only administrators can manage user roles.');
     }
 
-    // Throw a generic internal error for other issues.
-    throw new HttpsError("internal", err.message || "An unexpected error occurred while creating the user.");
-  }
+    const { uid, role } = request.data;
+    if (!uid || !role) {
+        throw new HttpsError('invalid-argument', 'The function must be called with "uid" and "role" arguments.');
+    }
+
+    try {
+        await auth.setCustomUserClaims(uid, { role });
+        await firestore.collection('users').doc(uid).update({ role });
+
+        return { success: true, message: `Successfully updated role to ${role} for user ${uid}.` };
+    } catch (error: any) {
+        console.error("Error updating user role:", error);
+        throw new HttpsError('internal', 'An unexpected error occurred while updating the user role.', error.message);
+    }
+});
+
+export const deleteUser = onCall(corsOptions, async (request) => {
+    const auth = getAuth();
+    const firestore = getFirestore();
+
+    if (!request.auth || request.auth.token.role !== 'admin') {
+        throw new HttpsError('permission-denied', 'Only administrators can delete users.');
+    }
+
+    const { uid } = request.data;
+    if (!uid) {
+        throw new HttpsError('invalid-argument', 'The function must be called with a "uid" argument.');
+    }
+
+    try {
+        await auth.deleteUser(uid);
+        await firestore.collection('users').doc(uid).delete();
+
+        return { success: true, message: `Successfully deleted user ${uid}.` };
+    } catch (error: any) {
+        console.error("Error deleting user:", error);
+        throw new HttpsError('internal', 'An unexpected error occurred while deleting the user.', error.message);
+    }
 });
