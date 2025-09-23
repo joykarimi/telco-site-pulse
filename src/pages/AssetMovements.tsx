@@ -6,11 +6,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NewMovementRequestForm } from "@/components/assets/asset-movement-requests";
-import { getAssetMovements, updateAssetMovementStatus, deleteAssetMovement, AssetMovement, getAsset, getUserByRole } from "@/lib/firebase/firestore";
+import { getAssetMovements, AssetMovement, getAsset, getUserByRole } from "@/lib/firebase/firestore";
 import { EditAssetMovementForm } from "@/components/asset-movements/edit-asset-movement-form";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
 import { useNotifications } from "@/context/NotificationContext";
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const statusVariant = {
   'Pending': 'default',
@@ -21,10 +22,12 @@ const statusVariant = {
 export default function AssetMovements() {
   const { user, role } = useAuth();
   const { addNotification, refreshNotifications } = useNotifications();
-  const canApprove = role === 'admin' || role === 'operations_manager' || role === 'maintenance_manager';
+  const canApprove = role === 'admin' || role === 'operations_manager';
+  const canDelete = role === 'admin';
   const [movements, setMovements] = useState<AssetMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const functions = getFunctions();
 
   const fetchMovements = async () => {
     try {
@@ -49,8 +52,7 @@ export default function AssetMovements() {
     // Notify Admins and Operations Managers of a new request
     const adminUsers = await getUserByRole('admin');
     const opsManagers = await getUserByRole('operations_manager');
-    const maintenanceManagers = await getUserByRole('maintenance_manager');
-    const relevantUsers = [...adminUsers, ...opsManagers, ...maintenanceManagers];
+    const relevantUsers = [...adminUsers, ...opsManagers];
 
     relevantUsers.forEach(async (u) => {
         const latestMovement = (await getAssetMovements()).sort((a,b) => (b.id > a.id ? 1 : -1))[0]; // Get the very last added movement
@@ -59,7 +61,7 @@ export default function AssetMovements() {
           addNotification(
               `New asset movement request for ${asset?.serialNumber || latestMovement.assetId} from ${latestMovement.fromSite} to ${latestMovement.toSite}.`,
               'info',
-              `/asset-movement-requests/${latestMovement.id}`, // Link to the request details
+              `/asset-movement-requests/${latestMovement.id}`,
               u.uid
           );
         }
@@ -68,32 +70,45 @@ export default function AssetMovements() {
   };
 
   const handleUpdateStatus = async (movement: AssetMovement, status: 'Approved' | 'Rejected') => {
+    const updateStatus = httpsCallable(functions, 'updateMovementStatus');
     try {
-        await updateAssetMovementStatus(movement.id, status);
-        fetchMovements(); // Re-fetch to update the UI
+      await updateStatus({ movementId: movement.id, status });
+      fetchMovements(); // Re-fetch to update the UI
 
-        // Notify the requester about the status update
-        const asset = await getAsset(movement.assetId);
-        addNotification(
-            `Your asset movement request for ${asset?.serialNumber || movement.assetId} to ${movement.toSite} has been ${status.toLowerCase()}.`,
-            status === 'Approved' ? 'success' : 'error',
-            `/asset-movement-requests/${movement.id}`, // Link to the request details
-            movement.requestedBy // Target the user who made the request
-        );
-        refreshNotifications();
+      // Notify the requester about the status update
+      const asset = await getAsset(movement.assetId);
+      addNotification(
+          `Your asset movement request for ${asset?.serialNumber || movement.assetId} to ${movement.toSite} has been ${status.toLowerCase()}.`,
+          status === 'Approved' ? 'success' : 'error',
+          `/asset-movement-requests/${movement.id}`,
+          movement.requestedBy
+      );
+      refreshNotifications();
     } catch (err) {
         alert(`Failed to ${status.toLowerCase()} request. Please try again.`);
-        console.error(err);
+        console.error("Error calling updateMovementStatus: ", err);
     }
   };
 
-  const handleDelete = async (movementId: string) => {
+  const handleDelete = async (movement: AssetMovement) => {
+    const deleteMovement = httpsCallable(functions, 'deleteMovementRequest');
     try {
-        await deleteAssetMovement(movementId);
-        fetchMovements();
-        refreshNotifications();
+      await deleteMovement({ movementId: movement.id });
+      fetchMovements();
+
+      // Notify the requester that their request was deleted
+      const asset = await getAsset(movement.assetId);
+      addNotification(
+          `Your asset movement request for ${asset?.serialNumber || movement.assetId} from ${movement.fromSite} to ${movement.toSite} was deleted by an administrator.`,
+          'error', // Use 'error' or 'info' as appropriate
+          undefined,      // No specific link is needed for a deleted item
+          movement.requestedBy // Target the user who made the request
+      );
+
+      refreshNotifications();
     } catch (err) {
-        console.error("Error deleting asset movement: ", err);
+      console.error("Error deleting asset movement: ", err);
+      alert("Failed to delete the request. Please try again."); // Inform user of failure
     }
   };
 
@@ -144,6 +159,7 @@ export default function AssetMovements() {
                               </div>
                             )}
                             <EditAssetMovementForm movement={move} onMovementUpdated={fetchMovements} />
+                            {canDelete && (
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button variant="ghost" size="icon">
@@ -159,10 +175,11 @@ export default function AssetMovements() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDelete(move.id)}>Delete</AlertDialogAction>
+                                        <AlertDialogAction onClick={() => handleDelete(move)}>Delete</AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
+                            )}
                         </div>
                     </TableCell>
                   </TableRow>

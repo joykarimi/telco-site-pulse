@@ -1,69 +1,46 @@
-import { useState, useEffect } from "react";
+
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
-import { db } from "@/firebase";
-import { collection, getDocs } from "firebase/firestore";
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { Users, Shield, Settings, User, Trash2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { db, functions } from "@/firebase";
+import { collection, getDocs, Timestamp } from "firebase/firestore";
+import { httpsCallable } from 'firebase/functions';
+import { Users, Shield, Settings, User as UserIcon, Trash2, Loader2 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-
-export type UserRole = "admin" | "maintenance_manager" | "operations_manager" | "user";
+import { ROLES, Role, ROLE_ICONS, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles";
+import { motion } from "framer-motion";
 
 interface UserProfile {
   id: string;
-  user_id: string;
-  full_name: string;
-  phoneNumber?: string;
-  role: UserRole;
-  created_at: any; // Firestore timestamp
+  uid: string;
+  displayName: string;
+  email: string;
+  role: Role;
+  createdAt: Timestamp;
 }
 
-const roleIcons = {
-  admin: Shield,
-  maintenance_manager: Settings,
-  operations_manager: Users,
-  user: User,
-};
-
-const roleLabels = {
-  admin: "Admin",
-  maintenance_manager: "Maintenance Manager",
-  operations_manager: "Operations Manager",
-  user: "User",
-};
-
-const roleColors = {
-  admin: "destructive",
-  maintenance_manager: "default",
-  operations_manager: "secondary",
-  user: "outline",
-} as const;
-
-const functions = getFunctions();
 const manageUserRoleFn = httpsCallable(functions, 'manageUserRole');
 const deleteUserFn = httpsCallable(functions, 'deleteUser');
 
 export default function RolesPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
   const fetchUsers = async () => {
+    setLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(db, 'profiles'));
-      const usersData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as UserProfile[];
+      const querySnapshot = await getDocs(collection(db, 'userProfiles'));
+      const usersData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as UserProfile[]);
       setUsers(usersData);
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: "Failed to fetch users",
+        title: "Error Fetching Users",
+        description: error.message || "An unexpected error occurred.",
         variant: "destructive",
       });
     } finally {
@@ -71,133 +48,143 @@ export default function RolesPage() {
     }
   };
 
-  const updateUserRole = async (userId: string, role: UserRole) => {
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const handleUpdateRole = async (userId: string, newRole: Role) => {
+    setUpdatingUserId(userId);
     try {
-      await manageUserRoleFn({ userId, role });
-
+      await manageUserRoleFn({ uid: userId, role: newRole });
+      setUsers(prevUsers => prevUsers.map(user => user.uid === userId ? { ...user, role: newRole } : user));
       toast({
-        title: "Success",
-        description: "User role updated successfully",
+        title: "Role Updated",
+        description: `User role has been successfully changed to ${ROLE_LABELS[newRole]}.`,
+        variant: "success",
       });
-
-      fetchUsers();
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to update user role",
+        title: "Update Failed",
+        description: error.message || "Failed to update user role.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      await deleteUserFn({ uid: userId });
+      setUsers(prevUsers => prevUsers.filter(user => user.uid !== userId));
+      toast({
+        title: "User Deleted",
+        description: "The user has been successfully deleted.",
+        variant: "success",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Deletion Failed",
+        description: error.message || "Failed to delete user.",
         variant: "destructive",
       });
     }
   };
 
-  const deleteUser = async (userId: string) => {
-    try {
-      await deleteUserFn({ userId });
-      toast({
-        title: "Success",
-        description: "User deleted successfully",
-      });
-      fetchUsers();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete user",
-        variant: "destructive",
-      });
-    }
-  };
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => ROLES.indexOf(a.role) - ROLES.indexOf(b.role));
+  }, [users]);
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-.primary" />
-            User Management
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="space-y-6">
+      <Card className="overflow-hidden shadow-lg border-primary/10">
+        <CardHeader className="bg-muted/30">
+          <CardTitle className="flex items-center gap-2 text-2xl font-bold">
+            <Users className="h-6 w-6 text-primary" />
+            User Role Management
           </CardTitle>
-          <CardDescription>
-            Manage user roles and permissions
-          </CardDescription>
+          <CardDescription>View, assign, and manage user roles across the platform.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {loading ? (
-            <div className="flex justify-center p-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="flex justify-center items-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => {
-                  const RoleIcon = roleIcons[user.role];
-                  return (
-                    <TableRow key={user.id} className="hover:bg-accent/5 transition-colors">
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{user.full_name}</p>
-                           <p className="text-sm text-muted-foreground">{user.user_id}</p>
-                          <p className="text-sm text-muted-foreground">{user.phoneNumber}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={roleColors[user.role]} className="flex items-center gap-1 w-fit">
-                          <RoleIcon className="h-3 w-3" />
-                          {roleLabels[user.role]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(user.created_at.toDate()).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          {(["user", "maintenance_manager", "operations_manager", "admin"] as UserRole[]).map((role) => (
-                            <Button
-                              key={role}
-                              variant={user.role === role ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => updateUserRole(user.user_id, role)}
-                              disabled={user.role === role}
-                              className="text-xs"
-                            >
-                              {roleLabels[role]}
-                            </Button>
-                          ))}
-                           <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="icon">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            This action cannot be undone. This will permanently delete the user and all associated data.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => deleteUser(user.user_id)}>Delete</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Date Joined</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {sortedUsers.map((user) => {
+                        const RoleIcon = ROLE_ICONS[user.role];
+                        return (
+                            <TableRow key={user.id} className="hover:bg-muted/50">
+                                <TableCell className="font-medium">{user.displayName}</TableCell>
+                                <TableCell>
+                                    <Badge variant={ROLE_COLORS[user.role]} className="flex items-center gap-1.5 w-fit capitalize">
+                                        <RoleIcon className="h-3.5 w-3.5" />
+                                        {ROLE_LABELS[user.role]}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                                <TableCell className="text-muted-foreground">
+                                    {user.createdAt ? new Date(user.createdAt.toDate()).toLocaleDateString() : 'N/A'}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    {updatingUserId === user.uid ? (
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                    ) : (
+                                        <div className="flex justify-end gap-2">
+                                            {ROLES.map((role) => (
+                                                <Button
+                                                key={role}
+                                                variant={user.role === role ? "default" : "outline"}
+                                                size="sm"
+                                                onClick={() => handleUpdateRole(user.uid, role)}
+                                                disabled={user.role === role}
+                                                >
+                                                {ROLE_LABELS[role]}
+                                                </Button>
+                                            ))}
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="destructive" size="icon" className="ml-2">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Confirm User Deletion</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Are you sure you want to delete {user.displayName}? This action is permanent and cannot be undone.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleDeleteUser(user.uid)}>Delete User</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </div>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        );
+                        })}
+                    </TableBody>
+                </Table>
+            </div>
           )}
         </CardContent>
       </Card>
-    </div>
+    </motion.div>
   );
 }

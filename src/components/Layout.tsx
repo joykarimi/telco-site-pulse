@@ -1,26 +1,24 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Header } from '@/components/layout/header';
 import { Sidebar } from '@/components/layout/sidebar';
+import { cn } from '@/lib/utils';
 
 interface LayoutProps {
     children: React.ReactNode;
 }
 
 const AppLayout: React.FC<LayoutProps> = ({ children }) => {
-    // The new sidebar is self-contained and manages its own state.
-    // We just need to place it and the main content.
-
-    // We need to add padding to the main content to avoid it being overlapped by the fixed sidebar.
-    // The sidebar width is 256px when expanded and 80px when collapsed.
-    // We can use a media query for mobile, where the sidebar is a sheet.
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
     return (
-        <div className="min-h-screen bg-background">
-            <Sidebar />
-            <main className="md:pl-80 flex-1 flex flex-col">
+        <div className="min-h-screen bg-background font-sans antialiased">
+            <Sidebar isCollapsed={isSidebarCollapsed} setCollapsed={setIsSidebarCollapsed} />
+            <main className={cn("flex-1 flex flex-col transition-all duration-300 ease-in-out", 
+                isSidebarCollapsed ? "md:ml-24" : "md:ml-64"
+            )}>
                 <Header />
-                <div className="flex-1 overflow-y-auto p-8">
+                <div className="flex-1 overflow-y-auto p-4 md:p-8">
                     {children}
                 </div>
             </main>

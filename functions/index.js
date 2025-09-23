@@ -8,7 +8,7 @@ const db = getFirestore();
 
 /**
  * Creates a new user in Firebase Authentication, sets their custom claims (role),
- * stores their details in Firestore, and triggers an email for them to set their password.
+ * and stores their details in Firestore.
  */
 exports.createUser = functions.https.onCall(async (data, context) => {
   // --- Authentication and Permission Check ---
@@ -50,23 +50,10 @@ exports.createUser = functions.https.onCall(async (data, context) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // --- Generate Password Reset Link ---
-    const link = await admin.auth().generatePasswordResetLink(email);
-
-    // --- Trigger Invitation Email via Firestore Extension ---
-    // This adds a document to the 'mail' collection, which the Trigger Email extension listens to.
-    await db.collection("mail").add({
-        to: email,
-        message: {
-            subject: "Welcome! Your Account is Ready",
-            html: `<p>Hello ${fullName}!</p><p>An administrator has created an account for you with the role '<b>${role.replace(/_/g, " ")}</b>'.</p><p><a href="${link}">Click here to set your secure password</a>.</p><p>If you did not request this, please ignore this email.</p>`,
-        },
-    });
-
     // --- Return Success Message ---
     return {
       status: 'success',
-      message: `Successfully invited ${fullName}. An email to set their password has been sent to ${email}.`
+      message: `Successfully created user ${fullName}.`
     };
 
   } catch (error) {
@@ -80,5 +67,123 @@ exports.createUser = functions.https.onCall(async (data, context) => {
     }
 
     throw new functions.https.HttpsError('internal', 'An unexpected error occurred while creating the user.');
+  }
+});
+
+/**
+ * Updates the status of an asset movement request.
+ * Only callable by users with 'admin' or 'operations_manager' roles.
+ */
+exports.updateMovementStatus = functions.https.onCall(async (data, context) => {
+  // --- Authentication and Permission Check ---
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be authenticated to perform this action.');
+  }
+
+  const allowedRoles = ['admin', 'operations_manager'];
+  const userRole = context.auth.token.role;
+
+  if (!allowedRoles.includes(userRole)) {
+    throw new functions.https.HttpsError('permission-denied', 'You do not have permission to approve or reject asset movements.');
+  }
+
+  // --- Input Validation ---
+  const { movementId, status } = data;
+  if (!movementId || !status) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing required fields: movementId and status.');
+  }
+
+  const validStatuses = ['Approved', 'Rejected'];
+  if (!validStatuses.includes(status)) {
+    throw new functions.https.HttpsError('invalid-argument', `'${status}' is not a valid status. Must be 'Approved' or 'Rejected'.`);
+  }
+
+  try {
+    const movementRef = db.collection('movements').doc(movementId);
+    const movementDoc = await movementRef.get();
+
+    if (!movementDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Movement request not found.');
+    }
+
+    const movementData = movementDoc.data();
+    const assetRef = db.collection('assets').doc(movementData.assetId);
+
+    // --- Firestore Transaction ---
+    await db.runTransaction(async (transaction) => {
+      // 1. Update the movement request status
+      transaction.update(movementRef, {
+        status: status,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        actionedBy: context.auth.uid,
+      });
+
+      // 2. If approved, update the asset's current site
+      if (status === 'Approved') {
+        transaction.update(assetRef, {
+          currentSite: movementData.destinationSiteId,
+          lastMovedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    });
+
+    // --- Return Success Message ---
+    return {
+      status: 'success',
+      message: `Movement request has been successfully ${status.toLowerCase()}.`
+    };
+
+  } catch (error) {
+    console.error("Error updating movement status:", error);
+    if (error instanceof functions.https.HttpsError) {
+        throw error; // Re-throw HttpsError
+    }
+    throw new functions.https.HttpsError('internal', 'An unexpected error occurred while updating the movement status.');
+  }
+});
+
+/**
+ * Deletes an asset movement request.
+ * Only callable by users with the 'admin' role.
+ */
+exports.deleteMovementRequest = functions.https.onCall(async (data, context) => {
+  // --- Authentication and Permission Check ---
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be authenticated to perform this action.');
+  }
+
+  if (context.auth.token.role !== 'admin') {
+    throw new functions.https.HttpsError('permission-denied', 'You do not have permission to delete asset movement requests.');
+  }
+
+  // --- Input Validation ---
+  const { movementId } = data;
+  if (!movementId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing required field: movementId.');
+  }
+
+  try {
+    const movementRef = db.collection('movements').doc(movementId);
+    const movementDoc = await movementRef.get();
+
+    if (!movementDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Movement request not found.');
+    }
+
+    // --- Deletion ---
+    await movementRef.delete();
+
+    // --- Return Success Message ---
+    return {
+      status: 'success',
+      message: 'Movement request has been successfully deleted.'
+    };
+
+  } catch (error) {
+    console.error("Error deleting movement request:", error);
+    if (error instanceof functions.https.HttpsError) {
+        throw error; // Re-throw HttpsError
+    }
+    throw new functions.https.HttpsError('internal', 'An unexpected error occurred while deleting the movement request.');
   }
 });

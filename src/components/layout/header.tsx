@@ -1,5 +1,5 @@
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Button } from '../ui/button';
 import {
     DropdownMenu,
@@ -9,7 +9,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
-import { Avatar, AvatarFallback } from '../ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useAuth } from '../../auth/AuthProvider';
 import { LogOut, Settings, Menu } from 'lucide-react';
 import { ModeToggle } from '../mode-toggle';
@@ -46,6 +46,9 @@ const UserMenu: React.FC = React.memo(() => {
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                     <Avatar className="h-10 w-10">
+                        {user.photoURL ? (
+                            <AvatarImage src={user.photoURL} alt={user.displayName || 'User Avatar'} />
+                        ) : null}
                         <AvatarFallback className="bg-primary/20 text-primary font-bold">
                             {getInitials(user.displayName)}
                         </AvatarFallback>
@@ -84,7 +87,6 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
     return (
         <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/50 px-6 backdrop-blur-sm">
             {mobileMenuButton}
-            <h2 className="text-lg font-semibold text-foreground">Dashboard</h2>
             <div className="flex flex-1 items-center gap-4 justify-end">
                 <ModeToggle />
                 <NotificationDropdown />

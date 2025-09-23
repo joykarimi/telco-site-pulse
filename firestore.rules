@@ -1,9 +1,43 @@
-rules_version = '2';
 
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuth() && request.auth.token.role == 'admin';
+    }
+
+    match /users/{userId}/{document=**} {
+      allow read, write: if isAuth() && request.auth.uid == userId;
+    }
+
+    match /siteDefinitions/{siteId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isAdmin();
+    }
+
+    match /siteMonthlyData/{dataId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isAdmin();
+    }
+
+    match /assets/{assetId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isAdmin();
+    }
+
+    match /asset_movements/{movementId} {
+        allow read: if isAuth();
+        allow create: if isAuth();
+        allow update, delete: if isAdmin();
+    }
+
+    match /userProfiles/{userId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isAdmin();
     }
   }
 }

@@ -18,6 +18,7 @@ const RevenueBreakdown = lazy(() => import('./pages/RevenueBreakdown'));
 const AssetMovements = lazy(() => import('./pages/AssetMovements'));
 const SiteProfitability = lazy(() => import('./pages/SiteProfitability'));
 const Settings = lazy(() => import('./pages/Settings'));
+const NotificationsPage = lazy(() => import('./pages/Notifications'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
 
 function ProtectedLayout() {
@@ -54,6 +55,7 @@ export default function AppRoutes() {
             <Route path="/revenue-breakdown" element={<RevenueBreakdown />} />
             <Route path="/site-profitability" element={<SiteProfitability />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
 
             {/* Protected Routes */}
             <Route element={<ProtectedRoute permission={PERMISSIONS.ASSET_READ} />}>
