@@ -12,16 +12,16 @@ const AppLayout: React.FC<LayoutProps> = ({ children }) => {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
     return (
-        <div className="min-h-screen bg-background font-sans antialiased">
+        <div className="min-h-screen bg-background font-sans antialiased flex">
             <Sidebar isCollapsed={isSidebarCollapsed} setCollapsed={setIsSidebarCollapsed} />
-            <main className={cn("flex-1 flex flex-col transition-all duration-300 ease-in-out", 
+            <div className={cn("flex-1 flex flex-col transition-all duration-300 ease-in-out", 
                 isSidebarCollapsed ? "md:ml-24" : "md:ml-64"
             )}>
                 <Header />
-                <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                <main className="flex-1 overflow-y-auto p-4 md:p-8">
                     {children}
-                </div>
-            </main>
+                </main>
+            </div>
         </div>
     );
 };

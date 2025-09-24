@@ -1,3 +1,4 @@
+
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import Layout from './components/Layout';
@@ -11,7 +12,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Auth = lazy(() => import('./pages/Auth'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const CreateUserForm = lazy(() => import('./components/UserManagement/CreateUserForm'));
-const UsersPage = lazy(() => import('./components/UserManagement/UsersPage')); // 1. Renamed import
+const UsersPage = lazy(() => import('./components/UserManagement/UsersPage'));
 const Assets = lazy(() => import('./pages/Assets'));
 const Sites = lazy(() => import('./pages/Sites'));
 const RevenueBreakdown = lazy(() => import('./pages/RevenueBreakdown'));
@@ -68,14 +69,13 @@ export default function AppRoutes() {
               <Route path="/asset-movement-requests" element={<AssetMovements />} />
             </Route>
 
-            {/* 2. Standardized User Management Routes */}
-            <Route path="/users" element={<Outlet />}>
-              <Route element={<ProtectedRoute permission={PERMISSIONS.USER_MANAGEMENT_READ} />}>
-                <Route index element={<UsersPage />} />
-              </Route>
-              <Route element={<ProtectedRoute permission={PERMISSIONS.USER_MANAGEMENT_CREATE} />}>
-                <Route path="create" element={<CreateUserForm />} />
-              </Route>
+            {/* User Management Routes */}
+            <Route element={<ProtectedRoute permission={PERMISSIONS.USER_MANAGEMENT_READ} />}>
+              <Route path="/admin" element={<UsersPage />} />
+              <Route path="/admin/roles" element={<UsersPage />} />
+            </Route>
+            <Route element={<ProtectedRoute permission={PERMISSIONS.USER_MANAGEMENT_CREATE} />}>
+              <Route path="/admin/create-user" element={<CreateUserForm />} />
             </Route>
           </Route>
 
