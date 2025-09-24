@@ -61,11 +61,13 @@ export const listUsers = onCall(corsOptions, async (request) => {
   const firestore = getFirestore();
 
   try {
-    const usersSnapshot = await firestore.collection("users").orderBy("createdAt", "desc").get();
+    // Remove the orderBy clause to fetch all users, even those missing a createdAt field.
+    const usersSnapshot = await firestore.collection("users").get();
     
     const usersList = usersSnapshot.docs.map((doc) => {
       const data = doc.data();
-      const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+      // Handle cases where createdAt might be missing.
+      const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(0).toISOString();
       
       return {
         uid: doc.id,
@@ -76,6 +78,9 @@ export const listUsers = onCall(corsOptions, async (request) => {
       };
     });
 
+    // Manually sort the users by date in descending order, putting users with no date at the top.
+    usersList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     return { users: usersList };
 
   } catch (err: any) {
@@ -83,6 +88,7 @@ export const listUsers = onCall(corsOptions, async (request) => {
     throw new HttpsError("internal", "An unexpected error occurred while fetching the user list.");
   }
 });
+
 
 export const manageUserRole = onCall(corsOptions, async (request) => {
     const auth = getAuth();
@@ -127,7 +133,18 @@ export const deleteUser = onCall(corsOptions, async (request) => {
 
         return { success: true, message: `Successfully deleted user ${uid}.` };
     } catch (error: any) {
-        console.error("Error deleting user:", error);
-        throw new HttpsError('internal', 'An unexpected error occurred while deleting the user.', error.message);
+        if (error.code === 'auth/user-not-found') {
+            console.warn(`User with UID ${uid} not found in Auth, but attempting to delete from Firestore.`);
+            try {
+                await firestore.collection('users').doc(uid).delete();
+                return { success: true, message: `Cleaned up orphaned user record for UID ${uid}.` };
+            } catch (firestoreError: any) {
+                console.error(`Failed to delete orphaned user ${uid} from Firestore:`, firestoreError);
+                throw new HttpsError('internal', 'Failed to clean up an orphaned user record.', firestoreError.message);
+            }
+        } else {
+            console.error("Error deleting user:", error);
+            throw new HttpsError('internal', 'An unexpected error occurred while deleting the user.', error.message);
+        }
     }
 });
