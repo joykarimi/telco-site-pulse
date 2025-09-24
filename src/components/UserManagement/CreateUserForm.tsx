@@ -10,12 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ROLES } from "@/lib/roles";
 import { functions } from "@/firebase";
 import { httpsCallable } from "firebase/functions";
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 import { useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 const createUserFn = httpsCallable(functions, 'createUser');
+const auth = getAuth();
 
 const formSchema = z.object({
     firstName: z.string().min(2, { message: "First name must be at least 2 characters." }),
@@ -34,7 +36,6 @@ export default function CreateUserForm() {
             firstName: "",
             lastName: "",
             email: "",
-            // 1. Changed default role from 'USER' to 'VIEWER' as 'USER' is not a valid selection
             role: ROLES.VIEWER, 
         },
     });
@@ -44,19 +45,20 @@ export default function CreateUserForm() {
         
         const promise = () => new Promise(async (resolve, reject) => {
             try {
-                const result = await createUserFn(values);
-                resolve(result.data);
+                await createUserFn(values);
+                await sendPasswordResetEmail(auth, values.email);
+                resolve(values.email);
             } catch (error) {
                 reject(error);
             }
         });
 
         toast.promise(promise, {
-            loading: 'Creating user...',
-            success: () => {
+            loading: 'Creating user and sending invitation...',
+            success: (email) => {
                 form.reset();
                 setTimeout(() => navigate("/users"), 1500);
-                return `User created successfully! A password reset link has been sent to ${values.email}.`;
+                return `User created successfully! An invitation email has been sent to ${email}.`;
             },
             error: (error) => {
                 const message = error.message || "An unknown error occurred.";
@@ -68,7 +70,6 @@ export default function CreateUserForm() {
         });
     }
 
-    // 2. Filter out the unwanted 'USER' role from the list of options
     const assignableRoles = Object.values(ROLES).filter(role => role !== ROLES.USER);
 
     return (
@@ -138,7 +139,6 @@ export default function CreateUserForm() {
                                                 </SelectTrigger>
                                             </FormControl>
                                             <SelectContent>
-                                                {/* 3. Map over the filtered list of roles */}
                                                 {assignableRoles.map((role) => (
                                                     <SelectItem key={role} value={role} className="capitalize">
                                                         {role.replace(/_/g, ' ')}

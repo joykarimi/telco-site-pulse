@@ -39,9 +39,6 @@ export const createUser = onCall(corsOptions, async (request) => {
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    // This was the missing piece. It triggers the password reset email.
-    await auth.generatePasswordResetLink(email);
-
     return { uid: userRecord.uid };
   } catch (err: any) {
     console.error("Error creating user:", err);
