@@ -261,7 +261,7 @@ export function Sidebar({ isCollapsed, setCollapsed }: SidebarProps) {
             <Menu className="h-6 w-6" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className={cn("p-0 w-64 shadow-xl", theme === "dark" ? "bg-gray-900/70 backdrop-blur-lg border-r-gray-700/50" : "bg-white/70 backdrop-blur-lg border-r-gray-200/50")}>
+        <SheetContent side="left" className={cn("p-0 w-64 shadow-xl glass-card", theme === "dark" ? "bg-gray-900/70 backdrop-blur-lg border-r-gray-700/50" : "bg-white/70 backdrop-blur-lg border-r-gray-200/50")}>
           <SidebarContent />
         </SheetContent>
       </Sheet>

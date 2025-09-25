@@ -1,10 +1,11 @@
 
 import { useCallback, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom"; 
+import { useNavigate } from "react-router-dom"; 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getSiteDefinitions, getSiteMonthlyData, CombinedSiteData, SiteMonthlyData } from "@/lib/firebase/firestore";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell } from 'recharts';
 import { useDataFetching } from "@/hooks/use-data-fetching";
+import { InfoCard } from "@/components/InfoCard";
 
 const currentYear = new Date().getFullYear();
 const currentMonth = new Date().getMonth() + 1;
@@ -143,41 +144,20 @@ export default function Dashboard() {
                 <p className="text-muted-foreground">Showing data for {new Date(0, currentMonth - 1).toLocaleString('default', { month: 'long' })} {currentYear}</p>
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <Link to="/revenue-breakdown">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="h-4 w-4 text-muted-foreground"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{formatCurrency(totalEarnings)}</div>
-                        </CardContent>
-                    </Card>
-                </Link>
-                <Link to="/sites">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="h-4 w-4 text-muted-foreground"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-red-500">{formatCurrency(totalExpenses)}</div>
-                        </CardContent>
-                    </Card>
-                </Link>
-                <Link to="/sites">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" className="h-4 w-4 text-muted-foreground"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
-                        </CardHeader>
-                        <CardContent>
-                            <div className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {formatCurrency(netProfit)}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </Link>
+                <InfoCard 
+                    title="Total Earnings"
+                    value={formatCurrency(totalEarnings)}
+                />
+                <InfoCard 
+                    title="Total Expenses"
+                    value={formatCurrency(totalExpenses)}
+                    valueClassName="text-red-500"
+                />
+                <InfoCard 
+                    title="Net Profit"
+                    value={formatCurrency(netProfit)}
+                    valueClassName={netProfit >= 0 ? 'text-green-600' : 'text-red-600'}
+                />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
