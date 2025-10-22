@@ -1,8 +1,7 @@
-
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where, writeBatch, getDoc } from "firebase/firestore";
 import { db } from "@/firebase";
 import { AssetType } from "@/lib/asset-types";
-import { UserRole, ROLE_PERMISSIONS } from "@/lib/roles"; // Import ROLE_PERMISSIONS
+import { UserRole, ROLE_PERMISSIONS } from "@/lib/roles";
 
 // Asset Management Interfaces and Functions
 export interface Asset {
@@ -335,7 +334,7 @@ export interface Notification {
   assetId?: string;
   fromSite?: string;
   toSite?: string;
-  requestedBy?: string;
+  requestedByUserId?: string; // Add this new field
   importMonth?: number;
   importYear?: number;
   importSuccess?: boolean;
@@ -362,4 +361,16 @@ export async function getNotifications(userId: string): Promise<Notification[]> 
 export async function markNotificationAsRead(notificationId: string): Promise<void> {
     const notificationRef = doc(db, "notifications", notificationId);
     await updateDoc(notificationRef, { read: true });
+}
+
+export async function markAllNotificationsAsRead(userId: string): Promise<void> {
+    const q = query(collection(db, "notifications"), where("userId", "==", userId), where("read", "==", false));
+    const querySnapshot = await getDocs(q);
+    const batch = writeBatch(db);
+
+    querySnapshot.forEach((doc) => {
+        batch.update(doc.ref, { read: true });
+    });
+
+    await batch.commit();
 }

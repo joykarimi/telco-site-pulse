@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -88,7 +87,7 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
+    if (!user || !user.uid) { // Ensure user and user.uid exist
         setError("You must be logged in to make a request.");
         return;
     }
@@ -101,7 +100,7 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
             fromSite,
             toSite,
             reason,
-            requestedBy: user.email || 'Unknown User',
+            requestedBy: user.uid, // Use user.uid instead of user.email
             approver1,
             approver2,
         });

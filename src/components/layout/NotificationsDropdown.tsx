@@ -27,6 +27,15 @@ export function NotificationsDropdown() {
     }
   };
 
+  const renderNotificationMessage = (notification: any) => {
+    if (notification.type === 'asset_movement_request' && notification.requestedByUserId && notification.requesterDisplayName) {
+        // Construct a specific message for asset movement requests with requester name
+        return `New asset movement request for ${notification.assetId || 'N/A'} from ${notification.fromSite || 'N/A'} to ${notification.toSite || 'N/A'} by ${notification.requesterDisplayName}.`;
+    }
+    // Fallback to the original message for other notification types or if requester info is missing
+    return notification.message;
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -57,7 +66,7 @@ export function NotificationsDropdown() {
               >
                 <div className="pt-1">{getNotificationIcon(notification.type)}</div>
                 <div className="flex-1">
-                  <p className="text-sm leading-tight mb-0.5">{notification.message}</p>
+                  <p className="text-sm leading-tight mb-0.5">{renderNotificationMessage(notification)}</p>
                   <div className="flex items-center text-xs text-muted-foreground">
                     <Clock className="h-3 w-3 mr-1" />
                     <span>{formatDistanceToNow(notification.timestamp, { addSuffix: true })}</span>

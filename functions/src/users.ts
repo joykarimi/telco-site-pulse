@@ -1,7 +1,7 @@
-
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { ROLE_PERMISSIONS, UserRole } from "../lib/roles"; // Import ROLE_PERMISSIONS and UserRole
 
 const corsOptions = { cors: true };
 
@@ -26,7 +26,11 @@ export const createUser = onCall(corsOptions, async (request) => {
 
   try {
     const userRecord = await auth.createUser({ email, displayName });
-    await auth.setCustomUserClaims(userRecord.uid, { role });
+    
+    // Get permissions for the assigned role
+    const permissions = ROLE_PERMISSIONS[role as UserRole] || [];
+
+    await auth.setCustomUserClaims(userRecord.uid, { role, permissions });
 
     await firestore.collection("users").doc(userRecord.uid).set({
       uid: userRecord.uid,
@@ -50,10 +54,10 @@ export const createUser = onCall(corsOptions, async (request) => {
 });
 
 export const listUsers = onCall(corsOptions, async (request) => {
-  if (!request.auth || (request.auth.token.role !== "admin" && request.auth.token.role !== "approver")) {
+  if (!request.auth || (request.auth.token.role !== "admin" && request.auth.token.role !== "operations_manager" && request.auth.token.role !== "maintenance_manager")) { // Updated condition
     throw new HttpsError(
       "permission-denied",
-      "Only administrators and approvers can view user data."
+      "Only administrators and managers can view user data."
     );
   }
 
@@ -66,7 +70,6 @@ export const listUsers = onCall(corsOptions, async (request) => {
       const data = doc.data();
       const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(0).toISOString();
       
-      // Construct displayName if it doesn't exist
       const displayName = data.displayName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A");
 
       return {
@@ -103,7 +106,11 @@ export const manageUserRole = onCall(corsOptions, async (request) => {
     }
 
     try {
-        await auth.setCustomUserClaims(uid, { role });
+        // Get permissions for the assigned role from the imported ROLE_PERMISSIONS
+        const permissions = ROLE_PERMISSIONS[role as UserRole] || [];
+
+        // Set custom claims including both role and permissions
+        await auth.setCustomUserClaims(uid, { role, permissions });
         await firestore.collection('users').doc(uid).update({ role });
 
         return { success: true, message: `Successfully updated role to ${role} for user ${uid}.` };

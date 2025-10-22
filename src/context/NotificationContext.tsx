@@ -3,12 +3,13 @@ import { useAuth } from '@/auth/AuthProvider';
 import { useNotifications as useNotificationsHook } from '@/hooks/use-notifications';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { Notification } from '@/lib/firebase/firestore'; // Corrected import path
+import { Notification } from '@/lib/firebase/firestore';
 
 // Define a type for the data we want to send when adding a notification
 interface AddNotificationData extends Omit<Notification, 'id' | 'timestamp' | 'read' | 'userId'> {
   userId: string;
   read?: boolean;
+  requestedByUserId?: string; // Added this field
 }
 
 interface NotificationContextType {
