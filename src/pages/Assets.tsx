@@ -13,21 +13,29 @@ import { Input } from "@/components/ui/input";
 import { Trash2, Search } from "lucide-react";
 import { AddAssetToSiteForm } from "@/components/assets/add-asset-to-site-form";
 import { useDataFetching } from "@/hooks/use-data-fetching";
+import { PERMISSIONS } from "@/lib/roles"; // Import PERMISSIONS
 
 const statusVariant = {
   'Active': 'success',
-  'In Repair': 'warning',
-  'Retired': 'destructive',
+  'Inactive': 'destructive',
 } as const;
 
 export default function Assets() {
-  const { role } = useAuth();
-  const canManageAssets = role === 'admin' || role === 'maintenance_manager';
+  const { hasPermission } = useAuth(); // Use hasPermission instead of role
+  const canManageAssets = hasPermission(PERMISSIONS.ASSET_CREATE) || hasPermission(PERMISSIONS.ASSET_UPDATE) || hasPermission(PERMISSIONS.ASSET_DELETE);
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchPageData = useCallback(async () => {
-    const [assets, sites] = await Promise.all([getAssets(), getSiteDefinitions()]);
-    return { assets, sites };
+    try {
+      const [assets, sites] = await Promise.all([
+        getAssets(),
+        getSiteDefinitions()
+      ]);
+      return { assets, sites };
+    } catch (err) {
+      console.error("Error in fetchPageData:", err); // Catch and log errors
+      throw err; // Re-throw to be caught by useDataFetching
+    }
   }, []);
 
   const { data, loading, error, refetch } = useDataFetching(fetchPageData);
@@ -58,13 +66,16 @@ export default function Assets() {
   }, [refetch]);
 
   const filteredAssets = useMemo(() => {
-    return assets.filter(asset => 
-        asset.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        asset.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        asset.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        asset.site.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    }, [assets, searchTerm]);
+    return assets.filter(asset => {
+        const searchTermLower = searchTerm.toLowerCase();
+        return (
+            (asset.serialNumber?.toLowerCase() || '').includes(searchTermLower) ||
+            (asset.type?.toLowerCase() || '').includes(searchTermLower) ||
+            (asset.status?.toLowerCase() || '').includes(searchTermLower) ||
+            (asset.site?.toLowerCase() || '').includes(searchTermLower)
+        );
+    });
+  }, [assets, searchTerm]);
 
 
   const assetsBySite = useMemo(() => {
@@ -79,13 +90,13 @@ export default function Assets() {
   }, [filteredAssets]);
 
   const allSites = useMemo(() => {
-    const siteNames = new Set(sites.map(s => s.name));
-    const assetSiteNames = new Set(filteredAssets.map(a => a.site));
+    const siteNames = new Set(sites.map(s => s.name || 'Unassigned')); // Ensure site.name is not null/undefined
+    const assetSiteNames = new Set(filteredAssets.map(a => a.site || 'Unassigned')); // Ensure asset.site is not null/undefined
     const allSiteNames = Array.from(new Set([...siteNames, ...assetSiteNames]));
 
     if (searchTerm) {
         return allSiteNames.filter(siteName => 
-            siteName.toLowerCase().includes(searchTerm.toLowerCase()) || assetsBySite[siteName]
+            siteName.toLowerCase().includes(searchTerm.toLowerCase()) || (assetsBySite[siteName] && assetsBySite[siteName].length > 0)
         );
     }
     return allSiteNames;
@@ -94,9 +105,9 @@ export default function Assets() {
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="flex items-center justify-between space-y-2">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <h2 className="text-3xl font-bold tracking-tight">Asset Management</h2>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col sm:flex-row items-center gap-2">
                 {canManageAssets && <AddAssetForm onAssetAdded={refetch} sites={sites} />}
                 {canManageAssets && <Button variant="destructive" onClick={handleDeleteAllAssets}>Delete All Assets</Button>}
             </div>
@@ -107,7 +118,7 @@ export default function Assets() {
             <Input
                 type="search"
                 placeholder="Search by serial no, type, status, or site..."
-                className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px] bg-background"
+                className="pl-8 w-full max-w-sm bg-background"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -128,12 +139,13 @@ export default function Assets() {
 
                     return (
                         <Card key={siteName}>
-                            <CardHeader className="flex flex-row items-center justify-between">
+                            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <CardTitle>{siteName}</CardTitle>
                                 {canManageAssets && site && <AddAssetToSiteForm site={site} onAssetAdded={refetch} />}
                             </CardHeader>
                             <CardContent>
                             {siteAssets.length > 0 ? (
+                                <div className="relative w-full overflow-auto">
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
@@ -146,11 +158,11 @@ export default function Assets() {
                                         <TableBody>
                                             {siteAssets.map((asset) => (
                                             <TableRow key={asset.id}>
-                                                <TableCell className="font-medium">{asset.serialNumber}</TableCell>
-                                                <TableCell>{asset.type}</TableCell>
+                                                <TableCell className="font-medium">{asset.serialNumber || 'N/A'}</TableCell>
+                                                <TableCell>{asset.type || 'N/A'}</TableCell>
                                                 <TableCell>
-                                                <Badge variant={statusVariant[asset.status as keyof typeof statusVariant] || 'default'}>
-                                                    {asset.status}
+                                                <Badge variant={asset.status && statusVariant[asset.status as keyof typeof statusVariant] ? statusVariant[asset.status as keyof typeof statusVariant] : 'default'}>
+                                                    {asset.status || 'Unknown'}
                                                 </Badge>
                                                 </TableCell>
                                                 {canManageAssets && (
@@ -184,6 +196,7 @@ export default function Assets() {
                                             ))}
                                         </TableBody>
                                     </Table>
+                                </div>
                                 ) : (
                                     <p>No assets found for this site.</p>
                                 )}

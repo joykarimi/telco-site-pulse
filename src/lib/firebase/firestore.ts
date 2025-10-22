@@ -2,6 +2,7 @@
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where, writeBatch, getDoc } from "firebase/firestore";
 import { db } from "@/firebase";
 import { AssetType } from "@/lib/asset-types";
+import { UserRole, ROLE_PERMISSIONS } from "@/lib/roles"; // Import ROLE_PERMISSIONS
 
 // Asset Management Interfaces and Functions
 export interface Asset {
@@ -49,7 +50,7 @@ export async function getAsset(assetId: string): Promise<Asset | null> {
     }
 }
 
-export async function addAsset(assetData: Omit<Asset, 'id' | 'site'> & { site?: string }): Promise<void> {
+export async function addAsset(assetData: Omit<Asset, 'id'> & { site?: string }): Promise<void> {
     await addDoc(collection(db, "assets"), { ...assetData, site: assetData.site || 'Unassigned' });
 }
 
@@ -85,18 +86,39 @@ export interface AssetMovement {
     requestedBy: string; 
     status: AssetMovementStatus;
     reason?: string;
+    approver1?: string;
+    approver2?: string;
 }
 
 export async function getAssetMovements(): Promise<AssetMovement[]> {
     const querySnapshot = await getDocs(collection(db, "asset_movements"));
     return querySnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        approver1: doc.data().approver1 || undefined, // Ensure undefined if missing
+        approver2: doc.data().approver2 || undefined, // Ensure undefined if missing
     } as AssetMovement));
 }
 
-export async function requestAssetMovement(movementData: Omit<AssetMovement, 'id' | 'status' | 'requestedBy'> & { requestedBy: string }): Promise<void> {
-    await addDoc(collection(db, "asset_movements"), { ...movementData, status: 'Pending' });
+export async function getAssetMovement(movementId: string): Promise<AssetMovement | null> {
+    const docRef = doc(db, "asset_movements", movementId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        const data = docSnap.data();
+        return { 
+            id: docSnap.id, 
+            ...data,
+            approver1: data.approver1 || undefined,
+            approver2: data.approver2 || undefined,
+        } as AssetMovement;
+    } else {
+        return null;
+    }
+}
+
+export async function requestAssetMovement(movementData: Omit<AssetMovement, 'id' | 'status' | 'requestedBy'> & { requestedBy: string, approver1: string, approver2?: string }): Promise<string> {
+    const docRef = await addDoc(collection(db, "asset_movements"), { ...movementData, status: 'Pending' });
+    return docRef.id;
 }
 
 export async function updateAssetMovementStatus(movementId: string, status: 'Approved' | 'Rejected'): Promise<void> {
@@ -240,28 +262,61 @@ export interface UserProfile {
     uid: string;
     email: string;
     displayName: string;
-    role: 'admin' | 'maintenance_manager' | 'operations_manager' | 'viewer';
+    role: 'admin' | 'maintenance_manager' | 'operations_manager' | 'user' | 'viewer'; // Added 'user' role
 }
 
+// Correctly fetches a user profile, ensuring displayName is constructed if not present.
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-    const docRef = doc(db, "userProfiles", uid);
+    const docRef = doc(db, "users", uid);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as UserProfile;
+        const data = docSnap.data();
+        const displayName = data.displayName || `${data.firstName} ${data.lastName}`.trim();
+        return { uid: docSnap.id, ...data, displayName } as UserProfile;
     } else {
         return null;
     }
 }
 
+// Fetches all user profiles, ensuring displayName is present.
 export async function getUserProfiles(): Promise<UserProfile[]> {
-    const querySnapshot = await getDocs(collection(db, "userProfiles"));
-    return querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+    const querySnapshot = await getDocs(collection(db, "users"));
+    return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const displayName = data.displayName || `${data.firstName} ${data.lastName}`.trim();
+        return { uid: doc.id, ...data, displayName } as UserProfile;
+    });
 }
 
+// Fetches users by a specific role.
 export async function getUserByRole(role: UserProfile['role']): Promise<UserProfile[]> {
-    const q = query(collection(db, "userProfiles"), where("role", "==", role));
+    const q = query(collection(db, "users"), where("role", "==", role));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+    return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const displayName = data.displayName || `${data.firstName} ${data.lastName}`.trim();
+        return { uid: doc.id, ...data, displayName } as UserProfile;
+    });
+}
+
+export async function getUsersWithPermission(permission: string): Promise<UserProfile[]> {
+    const rolesWithPermission: UserRole[] = [];
+    for (const role in ROLE_PERMISSIONS) {
+        if (ROLE_PERMISSIONS[role as UserRole].includes(permission)) {
+            rolesWithPermission.push(role as UserRole);
+        }
+    }
+
+    if (rolesWithPermission.length === 0) {
+        return [];
+    }
+
+    const users: UserProfile[] = [];
+    for (const role of rolesWithPermission) {
+        const usersInRole = await getUserByRole(role);
+        users.push(...usersInRole);
+    }
+    return users;
 }
 
 

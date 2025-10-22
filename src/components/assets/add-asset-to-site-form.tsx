@@ -1,12 +1,13 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { assetTypes } from '@/lib/asset-types';
 import { addAsset, Site, isSerialNumberUnique } from '@/lib/firebase/firestore';
 import { Plus } from 'lucide-react';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
 interface AddAssetToSiteFormProps {
   site: Site;
@@ -70,6 +71,11 @@ export function AddAssetToSiteForm({ site, onAssetAdded }: AddAssetToSiteFormPro
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Asset to {site.name}</DialogTitle>
+          <VisuallyHidden>
+            <DialogDescription>
+              Fill in the form below to add a new asset to this site.
+            </DialogDescription>
+          </VisuallyHidden>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <p className="text-destructive">{error}</p>}

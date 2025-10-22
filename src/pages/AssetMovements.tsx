@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -6,12 +5,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NewMovementRequestForm } from "@/components/assets/asset-movement-requests";
-import { getAssetMovements, AssetMovement, getAsset, getUserByRole } from "@/lib/firebase/firestore";
+import { getAssetMovements, AssetMovement, getAsset, getAssetMovement, getUserProfile } from "@/lib/firebase/firestore";
 import { EditAssetMovementForm } from "@/components/asset-movements/edit-asset-movement-form";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
 import { useNotifications } from "@/context/NotificationContext";
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 const statusVariant = {
   'Pending': 'default',
@@ -19,21 +18,60 @@ const statusVariant = {
   'Rejected': 'destructive',
 } as const;
 
+const functions = getFunctions();
+const updateMovementStatus = httpsCallable(functions, 'updateMovementStatus');
+const deleteMovementRequest = httpsCallable(functions, 'deleteMovementRequest');
+
 export default function AssetMovements() {
-  const { user, role } = useAuth();
-  const { addNotification, refreshNotifications } = useNotifications();
-  const canApprove = role === 'admin' || role === 'operations_manager';
-  const canDelete = role === 'admin';
+  const { user, hasPermission } = useAuth();
+  const { addNotification } = useNotifications();
+  const canDelete = hasPermission('delete_movement_requests');
   const [movements, setMovements] = useState<AssetMovement[]>([]);
+  const [approverNames, setApproverNames] = useState<Record<string, { approver1?: string, approver2?: string }>>({});
+  const [assetSerialNumbers, setAssetSerialNumbers] = useState<Record<string, string>>({}); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const functions = getFunctions();
 
   const fetchMovements = async () => {
     try {
       setLoading(true);
       const movementsData = await getAssetMovements();
       setMovements(movementsData);
+
+      const approverNamePromises = movementsData.map(async (movement) => {
+        const approver1Profile = movement.approver1 ? await getUserProfile(movement.approver1) : null;
+        const approver1Name = approver1Profile?.displayName; 
+
+        const approver2Profile = movement.approver2 ? await getUserProfile(movement.approver2) : null;
+        const approver2Name = approver2Profile?.displayName; 
+
+        return { movementId: movement.id, approver1: approver1Name, approver2: approver2Name };
+      });
+
+      const assetSerialPromises = movementsData.map(async (movement) => {
+        const asset = await getAsset(movement.assetId);
+        return { assetId: movement.assetId, serialNumber: asset?.serialNumber || 'N/A' };
+      });
+
+      const [resolvedApproverNames, resolvedAssetSerials] = await Promise.all([
+        Promise.all(approverNamePromises),
+        Promise.all(assetSerialPromises)
+      ]);
+      
+      const newApproverNames = resolvedApproverNames.reduce((acc, { movementId, approver1, approver2 }) => {
+        acc[movementId] = { approver1, approver2 };
+        return acc;
+      }, {} as Record<string, { approver1?: string, approver2?: string }>);
+
+      setApproverNames(newApproverNames);
+
+      const newAssetSerialNumbers = resolvedAssetSerials.reduce((acc, { assetId, serialNumber }) => {
+        acc[assetId] = serialNumber;
+        return acc;
+      }, {} as Record<string, string>);
+
+      setAssetSerialNumbers(newAssetSerialNumbers);
+
       setError(null);
     } catch (err) {
       setError("Failed to fetch movement requests. Please try again later.");
@@ -47,43 +85,62 @@ export default function AssetMovements() {
     fetchMovements();
   }, []);
 
-  const handleNewMovementRequested = async () => {
+  const handleNewMovementRequested = async (newMovementId: string) => {
     await fetchMovements();
-    // Notify Admins and Operations Managers of a new request
-    const adminUsers = await getUserByRole('admin');
-    const opsManagers = await getUserByRole('operations_manager');
-    const relevantUsers = [...adminUsers, ...opsManagers];
+    const newMovement = await getAssetMovement(newMovementId);
 
-    relevantUsers.forEach(async (u) => {
-        const latestMovement = (await getAssetMovements()).sort((a,b) => (b.id > a.id ? 1 : -1))[0]; // Get the very last added movement
-        if (latestMovement) {
-          const asset = await getAsset(latestMovement.assetId);
-          addNotification(
-              `New asset movement request for ${asset?.serialNumber || latestMovement.assetId} from ${latestMovement.fromSite} to ${latestMovement.toSite}.`,
-              'info',
-              `/asset-movement-requests/${latestMovement.id}`,
-              u.uid
-          );
+    if (newMovement) {
+        const asset = await getAsset(newMovement.assetId);
+        const approverIds = [newMovement.approver1, newMovement.approver2].filter(Boolean);
+        
+        // Get the requester's profile
+        const requesterProfile = newMovement.requestedBy ? await getUserProfile(newMovement.requestedBy) : null;
+        const requesterDisplayName = requesterProfile?.displayName || requesterProfile?.email || 'Unknown User';
+
+        const notificationMessage = `New asset movement request for ${asset?.serialNumber || newMovement.assetId} from ${newMovement.fromSite} to ${newMovement.toSite} by ${requesterDisplayName}.`;
+        const notificationLink = `/asset-movement-requests/${newMovement.id}`;
+
+        for (const approverId of approverIds) {
+            if (approverId) {
+                addNotification({
+                    userId: approverId,
+                    message: notificationMessage,
+                    type: 'info',
+                    link: notificationLink,
+                    // Include additional data if needed for later display
+                    assetId: newMovement.assetId,
+                    fromSite: newMovement.fromSite,
+                    toSite: newMovement.toSite,
+                    requestedBy: newMovement.requestedBy,
+                });
+            }
         }
-    });
-    refreshNotifications();
+    }
   };
 
   const handleUpdateStatus = async (movement: AssetMovement, status: 'Approved' | 'Rejected') => {
-    const updateStatus = httpsCallable(functions, 'updateMovementStatus');
-    try {
-      await updateStatus({ movementId: movement.id, status });
-      fetchMovements(); // Re-fetch to update the UI
+    if (!user) return;
 
-      // Notify the requester about the status update
+    if (movement.approver1 !== user.uid && movement.approver2 !== user.uid) {
+        alert("You are not authorized to approve or reject this request.");
+        return;
+    }
+
+    try {
+        await updateMovementStatus({ movementId: movement.id, status });
+        fetchMovements();
+
       const asset = await getAsset(movement.assetId);
-      addNotification(
-          `Your asset movement request for ${asset?.serialNumber || movement.assetId} to ${movement.toSite} has been ${status.toLowerCase()}.`,
-          status === 'Approved' ? 'success' : 'error',
-          `/asset-movement-requests/${movement.id}`,
-          movement.requestedBy
-      );
-      refreshNotifications();
+      addNotification({
+          userId: movement.requestedBy, // Notify the original requester
+          message: `Your asset movement request for ${asset?.serialNumber || movement.assetId} to ${movement.toSite} has been ${status.toLowerCase()}.`,
+          type: status === 'Approved' ? 'success' : 'error',
+          link: `/asset-movement-requests/${movement.id}`,
+          assetId: movement.assetId,
+          fromSite: movement.fromSite,
+          toSite: movement.toSite,
+          // requestedBy: handled by the context from the current user
+      });
     } catch (err) {
         alert(`Failed to ${status.toLowerCase()} request. Please try again.`);
         console.error("Error calling updateMovementStatus: ", err);
@@ -91,24 +148,26 @@ export default function AssetMovements() {
   };
 
   const handleDelete = async (movement: AssetMovement) => {
-    const deleteMovement = httpsCallable(functions, 'deleteMovementRequest');
+    if (!user) return;
+
     try {
-      await deleteMovement({ movementId: movement.id });
+      await deleteMovementRequest({ movementId: movement.id });
       fetchMovements();
 
-      // Notify the requester that their request was deleted
       const asset = await getAsset(movement.assetId);
-      addNotification(
-          `Your asset movement request for ${asset?.serialNumber || movement.assetId} from ${movement.fromSite} to ${movement.toSite} was deleted by an administrator.`,
-          'error', // Use 'error' or 'info' as appropriate
-          undefined,      // No specific link is needed for a deleted item
-          movement.requestedBy // Target the user who made the request
-      );
-
-      refreshNotifications();
+      addNotification({
+          userId: movement.requestedBy, // Notify the original requester
+          message: `Your asset movement request for ${asset?.serialNumber || movement.assetId} from ${movement.fromSite} to ${movement.toSite} was deleted by an administrator.`,
+          type: 'error',
+          link: '',
+          assetId: movement.assetId,
+          fromSite: movement.fromSite,
+          toSite: movement.toSite,
+          // requestedBy: handled by the context from the current user
+      });
     } catch (err) {
       console.error("Error deleting asset movement: ", err);
-      alert("Failed to delete the request. Please try again."); // Inform user of failure
+      alert("Failed to delete the request. Please try again.");
     }
   };
 
@@ -134,56 +193,68 @@ export default function AssetMovements() {
                   <TableHead>From</TableHead>
                   <TableHead>To</TableHead>
                   <TableHead>Reason</TableHead>
+                  <TableHead>Approver 1</TableHead>
+                  <TableHead>Approver 2</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {movements.map((move) => (
-                  <TableRow key={move.id}>
-                    <TableCell className="font-medium">{move.assetId}</TableCell>
-                    <TableCell>{move.fromSite}</TableCell>
-                    <TableCell>{move.toSite}</TableCell>
-                    <TableCell>{move.reason}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant[move.status] || 'default'}>
-                        {move.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                        <div className="flex justify-end items-center">
-                            {canApprove && move.status === 'Pending' && (
-                              <div className="space-x-2">
-                                <Button variant="destructive" size="sm" onClick={() => handleUpdateStatus(move, 'Rejected')}>Reject</Button>
-                                <Button size="sm" className="bg-green-500 hover:bg-green-600" onClick={() => handleUpdateStatus(move, 'Approved')}>Approve</Button>
-                              </div>
-                            )}
-                            <EditAssetMovementForm movement={move} onMovementUpdated={fetchMovements} />
-                            {canDelete && (
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="icon">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            This action cannot be undone. This will permanently delete the asset movement request.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDelete(move)}>Delete</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                            )}
-                        </div>
-                    </TableCell>
+                {movements.length > 0 ? (
+                  movements.map((move) => (
+                    <TableRow key={move.id}>
+                      <TableCell className="font-medium">{assetSerialNumbers[move.assetId] || 'N/A'}</TableCell>
+                      <TableCell>{move.fromSite || 'N/A'}</TableCell>
+                      <TableCell>{move.toSite || 'N/A'}</TableCell>
+                      <TableCell>{move.reason || 'N/A'}</TableCell>
+                      <TableCell>{approverNames[move.id]?.approver1 || 'N/A'}</TableCell>
+                      <TableCell>{approverNames[move.id]?.approver2 || 'N/A'}</TableCell>
+                      <TableCell>
+                        <Badge variant={statusVariant[move.status] || 'default'}>
+                          {move.status || 'Unknown Status'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                          <div className="flex justify-end items-center">
+                              {(move.approver1 === user?.uid || move.approver2 === user?.uid) && move.status === 'Pending' && (
+                                <div className="space-x-2">
+                                  <Button variant="destructive" size="sm" onClick={() => handleUpdateStatus(move, 'Rejected')}>Reject</Button>
+                                  <Button size="sm" className="bg-green-500 hover:bg-green-600" onClick={() => handleUpdateStatus(move, 'Approved')}>Approve</Button>
+                                </div>
+                              )}
+                              {move.status !== 'Approved' && user?.uid !== move.approver1 && user?.uid !== move.approver2 && (
+                                <EditAssetMovementForm movement={move} onMovementUpdated={fetchMovements} />
+                              )}
+                              {canDelete && (
+                              <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon">
+                                          <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                              This action cannot be undone. This will permanently delete the asset movement request.
+                                          </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction onClick={() => handleDelete(move)}>Delete</AlertDialogAction>
+                                      </AlertDialogFooter>
+                                  </AlertDialogContent>
+                              </AlertDialog>
+                              )}
+                          </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center">No asset movement requests found.</TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           )}

@@ -1,16 +1,16 @@
 
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { usePermissions } from './AuthProvider';
+import { useAuth } from './AuthProvider';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   permission: string;
-  children?: React.ReactNode; // Allow children to be passed for more flexible routing
+  children?: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permission, children }) => {
-  const { hasPermission, loading, role } = usePermissions();
+  const { hasPermission, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -21,7 +21,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permission, children })
     );
   }
 
-  if (!role || !hasPermission(permission)) {
+  if (!hasPermission(permission)) {
     return <Navigate to="/unauthorized" state={{ from: location }} replace />;
   }
 

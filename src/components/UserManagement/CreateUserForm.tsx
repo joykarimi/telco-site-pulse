@@ -57,7 +57,7 @@ export default function CreateUserForm() {
             loading: 'Creating user and sending invitation...',
             success: (email) => {
                 form.reset();
-                setTimeout(() => navigate("/users"), 1500);
+                setTimeout(() => navigate("/admin/roles"), 1500);
                 return `User created successfully! An invitation email has been sent to ${email}.`;
             },
             error: (error) => {

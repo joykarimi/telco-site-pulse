@@ -50,35 +50,34 @@ export const createUser = onCall(corsOptions, async (request) => {
 });
 
 export const listUsers = onCall(corsOptions, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Authentication is required to perform this action.");
-  }
-
-  if (request.auth.token.role !== "admin") {
-    throw new HttpsError("permission-denied", "Only administrators can view user data.");
+  if (!request.auth || (request.auth.token.role !== "admin" && request.auth.token.role !== "approver")) {
+    throw new HttpsError(
+      "permission-denied",
+      "Only administrators and approvers can view user data."
+    );
   }
 
   const firestore = getFirestore();
 
   try {
-    // Remove the orderBy clause to fetch all users, even those missing a createdAt field.
     const usersSnapshot = await firestore.collection("users").get();
     
     const usersList = usersSnapshot.docs.map((doc) => {
       const data = doc.data();
-      // Handle cases where createdAt might be missing.
       const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(0).toISOString();
       
+      // Construct displayName if it doesn't exist
+      const displayName = data.displayName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A");
+
       return {
         uid: doc.id,
-        displayName: data.displayName || "N/A",
+        displayName: displayName,
         email: data.email || "N/A",
         role: data.role || "N/A",
         createdAt: createdAt,
       };
     });
 
-    // Manually sort the users by date in descending order, putting users with no date at the top.
     usersList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     return { users: usersList };

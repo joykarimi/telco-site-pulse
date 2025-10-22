@@ -7,20 +7,24 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from '@/auth/AuthProvider';
-import { getAssets, Asset, getSiteDefinitions, SiteDefinition, requestAssetMovement } from '@/lib/firebase/firestore';
+import { getAssets, Asset, getSiteDefinitions, SiteDefinition, requestAssetMovement, getUsersWithPermission, UserProfile } from '@/lib/firebase/firestore';
+import { PERMISSIONS } from '@/lib/roles';
 
 interface NewMovementRequestFormProps {
-    onMovementRequested: () => void;
+    onMovementRequested: (newMovementId: string) => void;
 }
 
 export function NewMovementRequestForm({ onMovementRequested }: NewMovementRequestFormProps) {
   const { user } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [sites, setSites] = useState<SiteDefinition[]>([]);
+  const [approvers, setApprovers] = useState<UserProfile[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState('');
   const [fromSite, setFromSite] = useState('');
   const [toSite, setToSite] = useState('');
   const [reason, setReason] = useState('');
+  const [approver1, setApprover1] = useState('');
+  const [approver2, setApprover2] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -28,17 +32,46 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
   useEffect(() => {
     if (open) {
       const fetchData = async () => {
-        try {
-            const [assetsData, sitesData] = await Promise.all([
-                getAssets(),
-                getSiteDefinitions()
-            ]);
-            setAssets(assetsData);
-            setSites(sitesData);
-        } catch (err) {
-            setError("Failed to load assets and sites.");
-            console.error(err);
+        setLoading(true);
+        setError(null);
+        
+        const results = await Promise.allSettled([
+          getAssets(),
+          getSiteDefinitions(),
+          getUsersWithPermission(PERMISSIONS.MOVEMENT_APPROVE)
+        ]);
+
+        let hasError = false;
+        let errorMessage = "Failed to load necessary data: ";
+
+        if (results[0].status === 'fulfilled') {
+          setAssets(results[0].value);
+        } else {
+          hasError = true;
+          errorMessage += "Assets failed to load. ";
+          console.error("Error fetching assets:", results[0].reason);
         }
+
+        if (results[1].status === 'fulfilled') {
+          setSites(results[1].value);
+        } else {
+          hasError = true;
+          errorMessage += "Sites failed to load. ";
+          console.error("Error fetching sites:", results[1].reason);
+        }
+
+        if (results[2].status === 'fulfilled') {
+          setApprovers(results[2].value);
+        } else {
+          hasError = true;
+          errorMessage += "Approvers failed to load. ";
+          console.error("Error fetching approvers:", results[2].reason);
+        }
+
+        if (hasError) {
+          setError(errorMessage + "Please check console for more details.");
+        }
+        setLoading(false);
       };
       fetchData();
     }
@@ -62,24 +95,25 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
     setError(null);
     setLoading(true);
 
-    const selectedAsset = assets.find(a => a.id === selectedAssetId);
-
     try {
-        await requestAssetMovement({
-            assetId: selectedAsset ? selectedAsset.serialNumber : selectedAssetId,
+        const newMovementId = await requestAssetMovement({
+            assetId: selectedAssetId,
             fromSite,
             toSite,
             reason,
             requestedBy: user.email || 'Unknown User',
+            approver1,
+            approver2,
         });
-        onMovementRequested();
+        onMovementRequested(newMovementId);
         setOpen(false);
         // Reset form
         setSelectedAssetId('');
         setFromSite('');
         setToSite('');
         setReason('');
-
+        setApprover1('');
+        setApprover2('');
     } catch (err) {
         setError("Failed to submit request. Please try again.");
         console.error(err);
@@ -122,6 +156,24 @@ export function NewMovementRequestForm({ onMovementRequested }: NewMovementReque
                 {sites.filter(s => s.name !== fromSite).map(site => <SelectItem key={site.id} value={site.name}>{site.name}</SelectItem>)}
                 </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+              <Label>Approver 1</Label>
+              <Select onValueChange={setApprover1} value={approver1} required>
+                  <SelectTrigger><SelectValue placeholder="Select Approver" /></SelectTrigger>
+                  <SelectContent>
+                  {approvers.map(approver => <SelectItem key={approver.uid} value={approver.uid}>{approver.displayName || approver.email} ({approver.role || 'N/A'})</SelectItem>)}
+                  </SelectContent>
+              </Select>
+          </div>
+          <div className="space-y-2">
+              <Label>Approver 2 (optional)</Label>
+              <Select onValueChange={setApprover2} value={approver2}>
+                  <SelectTrigger><SelectValue placeholder="Select Approver" /></SelectTrigger>
+                  <SelectContent>
+                  {approvers.filter(a => a.uid !== approver1).map(approver => <SelectItem key={approver.uid} value={approver.uid}>{approver.displayName || approver.email} ({approver.role || 'N/A'})</SelectItem>)}
+                  </SelectContent>
+              </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="reason">Reason</Label>

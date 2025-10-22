@@ -1,23 +1,11 @@
-
-import { useState } from 'react';
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { addSiteDefinition, addSiteMonthlyData } from "@/lib/firebase/firestore";
-
-const siteTypes = [
-    "Grid only",
-    "Grid and Generator",
-    "Grid + Generator + Solar",
-    "Generator only",
-    "Generator + Solar",
-    "Grid + Solar",
-    "Multi-Vendor Site",
-    "Coloc Site",
-    "Single-Operator Site"
-];
+import { useToast } from "@/components/ui/use-toast";
+import { addSiteDefinition, getSiteDefinitions } from "@/lib/firebase/firestore"; // Corrected import
 
 interface AddSiteFormProps {
     onSiteAdded: () => void;
@@ -26,86 +14,98 @@ interface AddSiteFormProps {
 }
 
 export function AddSiteForm({ onSiteAdded, selectedMonth, selectedYear }: AddSiteFormProps) {
-    const [name, setName] = useState('');
-    const [type, setType] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [open, setOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [siteName, setSiteName] = useState("");
+    const [siteType, setSiteType] = useState("");
+    const { toast } = useToast();
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
-        setLoading(true);
+    const handleCheckSite = async () => {
+        if (!siteName.trim() || !siteType.trim()) {
+            toast({ title: "Error", description: "Please fill in both site name and type.", variant: "destructive" });
+            return;
+        }
 
         try {
-            // 1. Add the site definition
-            const newSiteId = await addSiteDefinition({ name, type });
+            // Instead of getSiteDefinitionByName, we check if a site with the same name already exists
+            const existingSites = await getSiteDefinitions();
+            const siteExists = existingSites.some(site => site.name.toLowerCase() === siteName.toLowerCase());
 
-            // 2. Add an initial empty monthly data entry for the current context
-            await addSiteMonthlyData({
-                siteId: newSiteId,
-                month: selectedMonth,
-                year: selectedYear,
-                gridConsumption: 0,
-                fuelConsumption: 0,
-                solarContribution: '0',
-                earningsSafaricom: 0,
-                earningsAirtel: 0,
-                earningsJtl: 0,
-                gridUnitCost: 0,
-                fuelUnitCost: 0,
-                solarMaintenanceCost: 0,
-            });
+            if (siteExists) {
+                toast({ title: "Error", description: "A site with this name already exists.", variant: "destructive" });
+            } else {
+                setIsConfirmOpen(true);
+            }
+        } catch (error) {
+            console.error("Error checking site existence: ", error);
+            toast({ title: "Error", description: "Failed to check site existence.", variant: "destructive" });
+        }
+    };
 
+    const handleCreateSite = async () => {
+        try {
+            await addSiteDefinition({ name: siteName, type: siteType }); // Corrected function call
+            toast({ title: "Success", description: `Site \'${siteName}\' added successfully.` });
             onSiteAdded();
-            setOpen(false);
-            // Reset form fields
-            setName('');
-            setType('');
-
-        } catch (err) {
-            setError("Failed to add site. Please try again.");
-            console.error(err);
-        } finally {
-            setLoading(false);
+            setIsConfirmOpen(false);
+            setIsOpen(false);
+            setSiteName("");
+            setSiteType("");
+        } catch (error) {
+            console.error("Error adding new site: ", error);
+            toast({ title: "Error", description: "Failed to add new site.", variant: "destructive" });
         }
     };
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button>
-                    Add Site
-                </Button>
+                <Button>Add Site</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Add a New Site</DialogTitle>
+                    <DialogDescription>
+                        Enter the details for the new site below. Click save when you\'re done.
+                    </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-                    {error && <p className="text-destructive col-span-2">{error}</p>}
-                    <div className="space-y-2">
-                        <Label htmlFor="name">Site Name/ID</Label>
-                        <Input id="name" placeholder="e.g., Kajiado-01" value={name} onChange={(e) => setName(e.target.value)} required />
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="site-name" className="text-right">Name</Label>
+                        <Input id="site-name" value={siteName} onChange={(e) => setSiteName(e.target.value)} className="col-span-3" placeholder="e.g., Site Alpha" />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="type">Site Type</Label>
-                        <Select onValueChange={setType} value={type} required>
-                            <SelectTrigger id="type">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="site-type" className="text-right">Type</Label>
+                        <Select onValueChange={setSiteType} value={siteType}>
+                            <SelectTrigger className="col-span-3">
                                 <SelectValue placeholder="Select a type" />
                             </SelectTrigger>
                             <SelectContent>
-                                {siteTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                                <SelectItem value="Rooftop">Rooftop</SelectItem>
+                                <SelectItem value="Greenfield">Greenfield</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="col-span-2">
-                        <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? 'Adding Site...' : 'Add Site'}
-                        </Button>
-                    </div>
-                </form>
+                </div>
+                <DialogFooter>
+                    <Button onClick={handleCheckSite}>Save</Button>
+                </DialogFooter>
             </DialogContent>
+
+            <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Create New Site?</DialogTitle>
+                        <DialogDescription>
+                            A site with this name does not exist. Would you like to create it?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsConfirmOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCreateSite}>Create</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Dialog>
     );
 }

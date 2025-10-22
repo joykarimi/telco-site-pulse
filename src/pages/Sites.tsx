@@ -124,11 +124,13 @@ export default function Sites() {
     }, []);
 
     const filteredSites = useMemo(() => {
-      if (!combinedSites) return [];
-        return combinedSites.filter(site =>
-            site.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            site.type.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        if (!combinedSites) return [];
+        return combinedSites.filter(site => {
+            const name = site.name || "";
+            const type = site.type || "";
+            return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                   type.toLowerCase().includes(searchTerm.toLowerCase());
+        });
     }, [combinedSites, searchTerm]);
 
     const categorizedSites = useMemo(() => {
@@ -237,11 +239,11 @@ export default function Sites() {
 
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <h2 className="text-3xl font-bold tracking-tight">Site Financials</h2>
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Select value={String(selectedMonth)} onValueChange={(value) => setSelectedMonth(Number(value))}>
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-full sm:w-[180px]">
                             <SelectValue placeholder="Select Month" />
                         </SelectTrigger>
                         <SelectContent>
@@ -251,7 +253,7 @@ export default function Sites() {
                         </SelectContent>
                     </Select>
                     <Select value={String(selectedYear)} onValueChange={(value) => setSelectedYear(Number(value))}>
-                        <SelectTrigger className="w-[120px]">
+                        <SelectTrigger className="w-full sm:w-[120px]">
                             <SelectValue placeholder="Select Year" />
                         </SelectTrigger>
                         <SelectContent>
@@ -260,13 +262,21 @@ export default function Sites() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button onClick={checkAllMonthsData}>Check All Months</Button>
-                    <AddSiteForm onSiteAdded={refetch} selectedMonth={selectedMonth} selectedYear={selectedYear}/>
-                    <ImportConfirmationDialog 
-                        selectedMonth={selectedMonth} 
-                        selectedYear={selectedYear} 
-                        onConfirm={handleImportConfirm} 
-                    />
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <Button onClick={checkAllMonthsData} className="w-full">Check All Months</Button>
+                        <AddSiteForm onSiteAdded={refetch} selectedMonth={selectedMonth} selectedYear={selectedYear}/>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <ImportConfirmationDialog 
+                            selectedMonth={selectedMonth} 
+                            selectedYear={selectedYear} 
+                            onConfirm={handleImportConfirm} 
+                        />
+                        <Button onClick={handleDownloadExcel} className="w-full">
+                            <Download className="mr-2 h-4 w-4" />
+                            Download
+                        </Button>
+                    </div>
                     <input 
                         type="file" 
                         ref={fileInputRef} 
@@ -274,10 +284,6 @@ export default function Sites() {
                         className="hidden" 
                         accept=".xlsx, .xls"
                     />
-                     <Button onClick={handleDownloadExcel}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Download as Excel
-                    </Button>
                 </div>
             </div>
 
@@ -298,13 +304,13 @@ export default function Sites() {
                     <Input
                         type="search"
                         placeholder="Search by site name or type..."
-                        className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px] bg-background"
+                        className="pl-8 w-full sm:w-[300px] md:w-[200px] lg:w-[300px] bg-background"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap gap-2">
                     {categories.map(category => (
                         <Button
                             key={category}

@@ -60,8 +60,8 @@ const LoginPage = () => {
                     </div>
                 </motion.div>
             </div>
-            <div className="flex items-center justify-center py-12">
-                <div className="mx-auto grid w-[350px] gap-6">
+            <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto grid w-full max-w-md gap-6">
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-3xl font-bold">Admin Login</CardTitle>

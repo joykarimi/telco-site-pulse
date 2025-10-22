@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useAuth } from '../../auth/AuthProvider';
 import { LogOut, Settings, Menu } from 'lucide-react';
 import { ModeToggle } from '../mode-toggle';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-mobile.tsx';
 import NotificationDropdown from './notification-dropdown';
 
 interface HeaderProps {

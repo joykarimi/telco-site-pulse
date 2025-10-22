@@ -10,7 +10,7 @@ import {
     updateProfile,
 } from 'firebase/auth';
 import { auth } from '../firebase';
-import { UserRole, hasPermission as checkPermission } from '../lib/roles'; // Renamed for clarity
+import { UserRole, hasPermission as checkPermission } from '../lib/roles';
 
 interface AuthContextType {
     user: User | null;
@@ -32,12 +32,6 @@ export const useAuth = () => {
     return context;
 };
 
-// Custom hook for checking permissions
-export const usePermissions = () => {
-    const { hasPermission, role, loading } = useAuth();
-    return { hasPermission, role, loading };
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [role, setRole] = useState<UserRole | undefined>();
@@ -52,17 +46,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const userRole = idTokenResult.claims.role as UserRole;
                     setUser(currentUser);
                     setRole(userRole);
+                    setLoading(false); // Set loading to false on success
                 } catch (error) {
                     console.error("Error fetching user role:", error);
                     setUser(null);
                     setRole(undefined);
                     await firebaseSignOut(auth);
+                    setLoading(false); // Set loading to false on error
                 }
             } else {
                 setUser(null);
                 setRole(undefined);
+                setLoading(false); // Set loading to false when no user
             }
-            setLoading(false);
         });
 
         return () => unsubscribe();
@@ -75,9 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const signUp = useCallback(async (email: string, pass: string, fullName: string) => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         await updateProfile(userCredential.user, { displayName: fullName });
-        // After sign-up, you might want to trigger a function to set custom claims (e.g., role)
-        // This is usually done from a backend/serverless function for security.
-        // For now, onAuthStateChanged will pick up the new user.
     }, []);
 
     const signOut = useCallback(async () => {

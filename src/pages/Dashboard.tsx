@@ -139,9 +139,9 @@ export default function Dashboard() {
 
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-                <p className="text-muted-foreground">Showing data for {new Date(0, currentMonth - 1).toLocaleString('default', { month: 'long' })} {currentYear}</p>
+                <p className="text-muted-foreground text-sm md:text-base">Showing data for {new Date(0, currentMonth - 1).toLocaleString('default', { month: 'long' })} {currentYear}</p>
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <InfoCard 
@@ -160,27 +160,27 @@ export default function Dashboard() {
                 />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="col-span-4">
+            <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
+                <Card className="lg:col-span-4">
                     <CardHeader>
                         <CardTitle>Earnings by Tenant</CardTitle>
                     </CardHeader>
                     <CardContent className="pl-2">
                         <ResponsiveContainer width="100%" height={350}>
-                            <BarChart data={tenantData} margin={{ top: 20, right: 30, left: 60, bottom: 5 }}> 
+                            <BarChart data={tenantData} margin={{ top: 20, right: 20, left: 20, bottom: 5 }}> 
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.3} /> 
                                 <XAxis dataKey="name" tickLine={false} axisLine={false} />
                                 <YAxis 
-                                    label={{ value: 'Earnings (KES)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: '14px', fontWeight: 'bold' } }} 
+                                    label={{ value: 'Earnings (KES)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: '14px' } }} 
                                     tickFormatter={formatLargeCurrency} 
                                     axisLine={false} 
                                     tickLine={false} 
-                                    width={100} 
-                                    tick={{ fill: 'hsl(var(--foreground))' , fontSize: '12px', fontWeight: 'bold' }} 
+                                    width={80} 
+                                    tick={{ fill: 'hsl(var(--foreground))', fontSize: '12px' }} 
                                 />
                                 <Tooltip formatter={(value: number) => formatCurrency(value)} />
                                 <Legend />
-                                <Bar dataKey="earnings" radius={[4, 4, 0, 0]} animationBegin={0} animationDuration={800} barSize={60} stroke="hsl(var(--card-foreground))" strokeWidth={1} onClick={handleBarClick}> {/* Added onClick handler */}
+                                <Bar dataKey="earnings" radius={[4, 4, 0, 0]} animationBegin={0} animationDuration={800} barSize={60} stroke="hsl(var(--card-foreground))" strokeWidth={1} onClick={handleBarClick}>
                                     {tenantData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.color} />
                                     ))}
@@ -191,7 +191,7 @@ export default function Dashboard() {
                     </CardContent>
                 </Card>
 
-                <Card className="col-span-3">
+                <Card className="lg:col-span-3">
                     <CardHeader>
                         <CardTitle>Site Profitability</CardTitle>
                     </CardHeader>

@@ -10,10 +10,8 @@ import { CalendarIcon, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Asset, updateAsset, isSerialNumberUnique, SiteDefinition } from '@/lib/firebase/firestore';
-import { assetTypes } from '@/lib/asset-types';
+import { assetTypes, AssetStatus } from '@/lib/asset-types';
 import { SearchableSelect } from "@/components/ui/searchable-select"; // Import the new component
-
-const assetStatus = ["Active", "In Repair", "Retired"];
 
 interface EditAssetFormProps {
     asset: Asset;
@@ -144,7 +142,7 @@ export function EditAssetForm({ asset, onAssetUpdated, sites }: EditAssetFormPro
           <Select onValueChange={setStatus} value={status} required>
             <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
-              {assetStatus.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {AssetStatus.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
           <SearchableSelect 

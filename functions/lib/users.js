@@ -4,13 +4,7 @@ exports.deleteUser = exports.manageUserRole = exports.listUsers = exports.create
 const https_1 = require("firebase-functions/v2/https");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
-// Define CORS options to allow requests from any origin.
-// This is safe for onCall functions because they are protected by authentication checks.
 const corsOptions = { cors: true };
-/**
- * Creates a new user in Firebase Authentication and a corresponding user
- * document in Firestore.
- */
 exports.createUser = (0, https_1.onCall)(corsOptions, async (request) => {
     const auth = (0, auth_1.getAuth)();
     const firestore = (0, firestore_1.getFirestore)();
@@ -48,10 +42,6 @@ exports.createUser = (0, https_1.onCall)(corsOptions, async (request) => {
         throw new https_1.HttpsError("internal", "An unexpected error occurred.");
     }
 });
-/**
- * Retrieves a list of all users from the Firestore 'users' collection.
- * This function is restricted to admin users only.
- */
 exports.listUsers = (0, https_1.onCall)(corsOptions, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "Authentication is required to perform this action.");
@@ -61,11 +51,13 @@ exports.listUsers = (0, https_1.onCall)(corsOptions, async (request) => {
     }
     const firestore = (0, firestore_1.getFirestore)();
     try {
-        const usersSnapshot = await firestore.collection("users").orderBy("createdAt", "desc").get();
+        // Remove the orderBy clause to fetch all users, even those missing a createdAt field.
+        const usersSnapshot = await firestore.collection("users").get();
         const usersList = usersSnapshot.docs.map((doc) => {
             var _a;
             const data = doc.data();
-            const createdAt = ((_a = data.createdAt) === null || _a === void 0 ? void 0 : _a.toDate) ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+            // Handle cases where createdAt might be missing.
+            const createdAt = ((_a = data.createdAt) === null || _a === void 0 ? void 0 : _a.toDate) ? data.createdAt.toDate().toISOString() : new Date(0).toISOString();
             return {
                 uid: doc.id,
                 displayName: data.displayName || "N/A",
@@ -74,6 +66,8 @@ exports.listUsers = (0, https_1.onCall)(corsOptions, async (request) => {
                 createdAt: createdAt,
             };
         });
+        // Manually sort the users by date in descending order, putting users with no date at the top.
+        usersList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         return { users: usersList };
     }
     catch (err) {
@@ -81,10 +75,6 @@ exports.listUsers = (0, https_1.onCall)(corsOptions, async (request) => {
         throw new https_1.HttpsError("internal", "An unexpected error occurred while fetching the user list.");
     }
 });
-/**
- * Updates a user's role (custom claim) in Firebase Auth and their user document in Firestore.
- * This function is restricted to admin users only.
- */
 exports.manageUserRole = (0, https_1.onCall)(corsOptions, async (request) => {
     const auth = (0, auth_1.getAuth)();
     const firestore = (0, firestore_1.getFirestore)();
@@ -96,9 +86,7 @@ exports.manageUserRole = (0, https_1.onCall)(corsOptions, async (request) => {
         throw new https_1.HttpsError('invalid-argument', 'The function must be called with "uid" and "role" arguments.');
     }
     try {
-        // Set the custom claim for the user's role
         await auth.setCustomUserClaims(uid, { role });
-        // Update the role in the user's Firestore document
         await firestore.collection('users').doc(uid).update({ role });
         return { success: true, message: `Successfully updated role to ${role} for user ${uid}.` };
     }
@@ -107,10 +95,6 @@ exports.manageUserRole = (0, https_1.onCall)(corsOptions, async (request) => {
         throw new https_1.HttpsError('internal', 'An unexpected error occurred while updating the user role.', error.message);
     }
 });
-/**
- * Deletes a user from Firebase Authentication and their corresponding document from Firestore.
- * This function is restricted to admin users only.
- */
 exports.deleteUser = (0, https_1.onCall)(corsOptions, async (request) => {
     const auth = (0, auth_1.getAuth)();
     const firestore = (0, firestore_1.getFirestore)();
@@ -122,15 +106,26 @@ exports.deleteUser = (0, https_1.onCall)(corsOptions, async (request) => {
         throw new https_1.HttpsError('invalid-argument', 'The function must be called with a "uid" argument.');
     }
     try {
-        // Delete the user from Firebase Authentication
         await auth.deleteUser(uid);
-        // Delete the user's document from Firestore
         await firestore.collection('users').doc(uid).delete();
         return { success: true, message: `Successfully deleted user ${uid}.` };
     }
     catch (error) {
-        console.error("Error deleting user:", error);
-        throw new https_1.HttpsError('internal', 'An unexpected error occurred while deleting the user.', error.message);
+        if (error.code === 'auth/user-not-found') {
+            console.warn(`User with UID ${uid} not found in Auth, but attempting to delete from Firestore.`);
+            try {
+                await firestore.collection('users').doc(uid).delete();
+                return { success: true, message: `Cleaned up orphaned user record for UID ${uid}.` };
+            }
+            catch (firestoreError) {
+                console.error(`Failed to delete orphaned user ${uid} from Firestore:`, firestoreError);
+                throw new https_1.HttpsError('internal', 'Failed to clean up an orphaned user record.', firestoreError.message);
+            }
+        }
+        else {
+            console.error("Error deleting user:", error);
+            throw new https_1.HttpsError('internal', 'An unexpected error occurred while deleting the user.', error.message);
+        }
     }
 });
 //# sourceMappingURL=users.js.map

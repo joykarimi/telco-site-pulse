@@ -1,4 +1,3 @@
-
 export type UserRole = "admin" | "maintenance_manager" | "operations_manager" | "user" | "viewer";
 
 export const ROLES = {
@@ -58,6 +57,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     PERMISSIONS.SITE_UPDATE,
     PERMISSIONS.SITE_DELETE,
     PERMISSIONS.ASSET_READ,
+    PERMISSIONS.MOVEMENT_APPROVE, // Added this permission
     PERMISSIONS.MOVEMENT_READ,
     PERMISSIONS.MOVEMENT_UPDATE,
     PERMISSIONS.USER_MANAGEMENT_READ,
@@ -68,6 +68,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     PERMISSIONS.ASSET_READ,
     PERMISSIONS.ASSET_UPDATE,
     PERMISSIONS.ASSET_DELETE,
+    PERMISSIONS.MOVEMENT_APPROVE, // Added this permission
     PERMISSIONS.MOVEMENT_READ,
     PERMISSIONS.USER_MANAGEMENT_READ,
   ],

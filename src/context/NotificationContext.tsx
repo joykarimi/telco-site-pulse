@@ -1,16 +1,21 @@
-
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 import { useNotifications as useNotificationsHook } from '@/hooks/use-notifications';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { Notification } from '@/types/notification';
+import { Notification } from '@/lib/firebase/firestore'; // Corrected import path
+
+// Define a type for the data we want to send when adding a notification
+interface AddNotificationData extends Omit<Notification, 'id' | 'timestamp' | 'read' | 'userId'> {
+  userId: string;
+  read?: boolean;
+}
 
 interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
   isLoading: boolean;
-  addNotification: (message: string, type: Notification['type'], link: string, userId: string) => Promise<void>;
+  addNotification: (data: AddNotificationData) => Promise<void>;
   markAsRead: (notificationId: string) => void;
   markAllAsRead: () => void;
 }
@@ -21,19 +26,17 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const { notifications, unreadCount, isLoading, markAsRead, markAllAsRead } = useNotificationsHook(user?.uid);
 
-  const addNotification = useCallback(async (message: string, type: Notification['type'], link: string, userId: string) => {
-    if (!userId) {
+  const addNotification = useCallback(async (data: AddNotificationData) => {
+    if (!data.userId) {
         console.error("Cannot add notification without a user ID.");
         return;
     }
 
     try {
-        const notificationsRef = collection(db, 'users', userId, 'notifications');
+        const notificationsRef = collection(db, 'users', data.userId, 'notifications');
         await addDoc(notificationsRef, {
-            message,
-            type,
-            link,
-            isRead: false,
+            ...data,
+            read: data.read ?? false,
             timestamp: serverTimestamp(),
         });
     } catch (error) {

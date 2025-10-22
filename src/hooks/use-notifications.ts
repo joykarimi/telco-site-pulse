@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { collection, query, onSnapshot, orderBy, doc, writeBatch } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { Notification } from '@/types/notification';
+import { Notification } from '@/lib/firebase/firestore'; // Corrected import path
 
 export const useNotifications = (userId: string | undefined) => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -18,6 +18,7 @@ export const useNotifications = (userId: string | undefined) => {
         }
 
         setIsLoading(true);
+        // The notifications collection is a subcollection under the user's document
         const notificationsRef = collection(db, 'users', userId, 'notifications');
         const q = query(notificationsRef, orderBy('timestamp', 'desc'));
 
@@ -28,14 +29,15 @@ export const useNotifications = (userId: string | undefined) => {
                 const data = doc.data();
                 const notification: Notification = {
                     id: doc.id,
+                    userId: userId, // Explicitly include userId
                     message: data.message,
                     type: data.type,
-                    link: data.link,
-                    isRead: data.isRead,
-                    timestamp: data.timestamp.toDate().toISOString(),
+                    link: data.link || undefined, // Ensure link is string or undefined
+                    read: data.isRead, // Firestore field is 'isRead', interface expects 'read'
+                    timestamp: data.timestamp.toDate(), // Store as Date object
                 };
                 fetchedNotifications.push(notification);
-                if (!notification.isRead) {
+                if (!notification.read) {
                     unread++;
                 }
             });
@@ -55,7 +57,7 @@ export const useNotifications = (userId: string | undefined) => {
         try {
             const notificationRef = doc(db, 'users', userId, 'notifications', notificationId);
             const batch = writeBatch(db);
-            batch.update(notificationRef, { isRead: true });
+            batch.update(notificationRef, { read: true }); // Update 'read' field
             await batch.commit();
         } catch (error) {
             console.error("Error marking notification as read: ", error);
@@ -65,13 +67,13 @@ export const useNotifications = (userId: string | undefined) => {
     const markAllAsRead = useCallback(async () => {
         if (!userId || unreadCount === 0) return;
     
-        const unreadNotifications = notifications.filter(n => !n.isRead);
+        const unreadNotifications = notifications.filter(n => !n.read); // Check 'read' field
     
         try {
           const batch = writeBatch(db);
           unreadNotifications.forEach(notification => {
             const notificationRef = doc(db, 'users', userId, 'notifications', notification.id);
-            batch.update(notificationRef, { isRead: true });
+            batch.update(notificationRef, { read: true }); // Update 'read' field
           });
           await batch.commit();
         } catch (error) {

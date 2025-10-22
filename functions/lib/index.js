@@ -1,14 +1,22 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteUser = exports.manageUserRole = exports.listUsers = exports.createUser = void 0;
 const admin = require("firebase-admin");
-// Initialize the Firebase Admin SDK.
 admin.initializeApp();
-// Import and export all the user management cloud functions.
-// This acts as the main entry point for all functions in this project.
-var users_1 = require("./users");
-Object.defineProperty(exports, "createUser", { enumerable: true, get: function () { return users_1.createUser; } });
-Object.defineProperty(exports, "listUsers", { enumerable: true, get: function () { return users_1.listUsers; } });
-Object.defineProperty(exports, "manageUserRole", { enumerable: true, get: function () { return users_1.manageUserRole; } });
-Object.defineProperty(exports, "deleteUser", { enumerable: true, get: function () { return users_1.deleteUser; } });
+// Directly export all onCall functions from their respective files.
+__exportStar(require("./users"), exports);
+__exportStar(require("./movements"), exports);
 //# sourceMappingURL=index.js.map

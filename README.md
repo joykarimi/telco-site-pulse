@@ -1,73 +1,168 @@
-# Welcome to your Lovable project
+# Telecommunication Asset Management System
 
-## Project info
+This is a web application designed to manage telecommunication assets, sites, and related movements. It provides a comprehensive dashboard for monitoring revenue, managing users, and tracking asset movements within different sites.
 
-**URL**: https://lovable.dev/projects/852d5d67-4c47-4e16-8f67-6fef77cb1920
+## Features
 
-## How can I edit this code?
+*   **Asset Management**: Add, edit, and track various telecommunication assets.
+*   **Site Management**: Create, update, and monitor different operational sites.
+*   **Asset Movement Tracking**: Record and manage the movement of assets between sites.
+*   **User Management**: Create and manage user accounts with different roles and permissions.
+*   **Dashboard & Reporting**: Overview of assets, revenue breakdown, and site profitability.
+*   **Authentication & Authorization**: Secure user login and role-based access control using Firebase Authentication.
+*   **Notifications**: Real-time notifications for important events.
+*   **Responsive Design**: A modern, responsive user interface built with React and Tailwind CSS.
 
-There are several ways of editing your application.
+## Technologies Used
 
-**Use Lovable**
+*   **Frontend**: React, TypeScript, Vite
+*   **Styling**: Tailwind CSS, Shadcn/ui
+*   **State Management/Data Fetching**: React Query
+*   **Backend & Database**: Firebase (Firestore, Authentication, Hosting, Cloud Functions)
+*   **Package Manager**: Bun
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/852d5d67-4c47-4e16-8f67-6fef77cb1920) and start prompting.
+## Setup and Installation
 
-Changes made via Lovable will be committed automatically to this repo.
+To get this project up and running on your local machine, follow these steps:
 
-**Use your preferred IDE**
+1.  **Clone the repository**:
+    ```bash
+    git clone <repository-url>
+    cd <project-directory>
+    ```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+2.  **Install dependencies**:
+    This project uses `bun` as a package manager. If you don't have bun installed, you can install it from [bun.sh](https://bun.sh/docs/installation).
+    ```bash
+    bun install
+    ```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Firebase Configuration
 
-Follow these steps:
+This application heavily relies on Firebase services. You will need to set up a Firebase project and configure it for this application.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+1.  **Create a Firebase Project**:
+    Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+2.  **Enable Firebase Services**:
+    Enable Firestore, Firebase Authentication (Email/Password provider), and Firebase Hosting for your project.
 
-# Step 3: Install the necessary dependencies.
-npm i
+3.  **Update `firebase.ts`**:
+    Update `src/firebase.ts` with your Firebase project configuration. You can find this information in your Firebase project settings under "Project settings" -> "Your apps".
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+    ```typescript
+    // src/firebase.ts
+    import { initializeApp } from "firebase/app";
+    import { getAuth } from "firebase/auth";
+    import { getFirestore } from "firebase/firestore";
+
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    export const auth = getAuth(app);
+    export const db = getFirestore(app);
+    ```
+
+4.  **`auth_config.json`**:
+    This file specifies the password policy action code settings for Firebase Authentication. Ensure the `url` matches your deployed Firebase Hosting URL for handling authentication actions like password resets.
+
+    ```json
+    {
+        "passwordPolicy": {
+            "actionCodeSettings": {
+                "url": "https://telco-c0b89.web.app/auth/action",
+                "handleCodeInApp": true
+            }
+        }
+    }
+    ```
+    *Note: The `url` in `auth_config.json` should be updated to your actual deployed domain.*
+
+5.  **`firebase.json`**:
+    This file contains your Firebase project's hosting and functions configuration.
+
+    ```json
+    {
+      "hosting": {
+        "public": "dist",
+        "ignore": [
+          "firebase.json",
+          "**/.*",
+          "**/node_modules/**"
+        ],
+        "rewrites": [
+          {
+            "source": "**",
+            "destination": "/index.html"
+          }
+        ]
+      },
+      "functions": {
+        "source": "functions"
+      },
+      "firestore": {
+        "rules": "firestore.rules"
+      }
+    }
+    ```
+
+6.  **Firestore Rules**:
+    The `firestore.rules` file defines the security rules for your Firestore database. Review and adjust them according to your application's security requirements.
+
+## Running the Application
+
+To run the application in development mode:
+
+```bash
+bun run dev
 ```
 
-**Edit a file directly in GitHub**
+This will start the Vite development server, and you can access the application in your browser, usually at `http://localhost:5173`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Project Structure
 
-**Use GitHub Codespaces**
+*   `public/`: Static assets like images and `index.html`.
+*   `src/`: Main application source code.
+    *   `src/App.tsx`: Main application component.
+    *   `src/Routes.tsx`: Defines application routes.
+    *   `src/auth/`: Authentication context, provider, and protected routes.
+    *   `src/components/`: Reusable UI components.
+    *   `src/context/`: React context providers (e.g., `NotificationContext`).
+    *   `src/hooks/`: Custom React hooks.
+    *   `src/lib/`: Utility functions and Firebase interaction logic.
+    *   `src/pages/`: Page-level components for different views.
+    *   `src/assets/`: Application assets like CSS and images.
+    *   `src/types/`: TypeScript type definitions.
+    *   `src/firebase.ts`: Firebase initialization and exports.
+*   `functions/`: Firebase Cloud Functions source code.
+*   `firestore.rules`: Firestore security rules.
+*   `firebase.json`: Firebase project configuration.
+*   `auth_config.json`: Firebase authentication configuration.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Deployment
 
-## What technologies are used for this project?
+To deploy the application to Firebase Hosting:
 
-This project is built with:
+1.  **Build the application**:
+    ```bash
+    bun run build
+    ```
+    This will create a `dist` folder containing the production-ready static assets.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+2.  **Deploy to Firebase**:
+    ```bash
+    firebase deploy --only hosting
+    ```
+    If you also have Firebase Functions, you might use:
+    ```bash
+    firebase deploy
+    ```
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/852d5d67-4c47-4e16-8f67-6fef77cb1920) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+    *Ensure you have the Firebase CLI installed and are logged in to your Firebase account (`firebase login`).*
