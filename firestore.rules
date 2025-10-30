@@ -9,6 +9,11 @@ service cloud.firestore {
       return isAuth() && request.auth.token.role == 'admin';
     }
 
+    function isApprover(movementId) {
+      return request.auth.uid == get(/databases/$(database)/documents/asset_movements/$(movementId)).data.approver1 ||
+             request.auth.uid == get(/databases/$(database)/documents/asset_movements/$(movementId)).data.approver2;
+    }
+
     match /users/{userId} {
       allow read: if isAuth(); // Allow all authenticated users to read any user profile
       allow write: if isAuth() && request.auth.uid == userId; // Users can write to their own profile
@@ -37,7 +42,8 @@ service cloud.firestore {
     match /asset_movements/{movementId} {
         allow read: if isAuth();
         allow create: if isAuth();
-        allow update, delete: if isAdmin();
+        allow update: if isAuth() && (isApprover(movementId) || isAdmin());
+        allow delete: if isAdmin();
     }
 
     match /userProfiles/{userId} {

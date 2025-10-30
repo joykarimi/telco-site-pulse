@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteMovementRequest = exports.updateMovementStatus = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
+const admin = require("firebase-admin");
 const db = (0, firestore_1.getFirestore)();
 exports.updateMovementStatus = (0, https_1.onCall)({ cors: true }, async (request) => {
     if (!request.auth) {
@@ -17,7 +18,11 @@ exports.updateMovementStatus = (0, https_1.onCall)({ cors: true }, async (reques
         throw new https_1.HttpsError("invalid-argument", "Invalid data provided.");
     }
     try {
-        await db.collection("asset_movements").doc(movementId).update({ status });
+        const updateData = { status };
+        if (status === "Approved") {
+            updateData.dateOfApproval = admin.firestore.Timestamp.now();
+        }
+        await db.collection("asset_movements").doc(movementId).update(updateData);
         return { success: true, message: "Movement status updated successfully." };
     }
     catch (error) {

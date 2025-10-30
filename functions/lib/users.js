@@ -4,6 +4,7 @@ exports.deleteUser = exports.manageUserRole = exports.listUsers = exports.create
 const https_1 = require("firebase-functions/v2/https");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
+const roles_1 = require("../lib/roles"); // Import ROLE_PERMISSIONS and UserRole
 const corsOptions = { cors: true };
 exports.createUser = (0, https_1.onCall)(corsOptions, async (request) => {
     const auth = (0, auth_1.getAuth)();
@@ -21,7 +22,9 @@ exports.createUser = (0, https_1.onCall)(corsOptions, async (request) => {
     const displayName = `${firstName} ${lastName}`;
     try {
         const userRecord = await auth.createUser({ email, displayName });
-        await auth.setCustomUserClaims(userRecord.uid, { role });
+        // Get permissions for the assigned role
+        const permissions = roles_1.ROLE_PERMISSIONS[role] || [];
+        await auth.setCustomUserClaims(userRecord.uid, { role, permissions });
         await firestore.collection("users").doc(userRecord.uid).set({
             uid: userRecord.uid,
             email,
@@ -43,30 +46,25 @@ exports.createUser = (0, https_1.onCall)(corsOptions, async (request) => {
     }
 });
 exports.listUsers = (0, https_1.onCall)(corsOptions, async (request) => {
-    if (!request.auth) {
-        throw new https_1.HttpsError("unauthenticated", "Authentication is required to perform this action.");
-    }
-    if (request.auth.token.role !== "admin") {
-        throw new https_1.HttpsError("permission-denied", "Only administrators can view user data.");
+    if (!request.auth || (request.auth.token.role !== "admin" && request.auth.token.role !== "operations_manager" && request.auth.token.role !== "maintenance_manager")) { // Updated condition
+        throw new https_1.HttpsError("permission-denied", "Only administrators and managers can view user data.");
     }
     const firestore = (0, firestore_1.getFirestore)();
     try {
-        // Remove the orderBy clause to fetch all users, even those missing a createdAt field.
         const usersSnapshot = await firestore.collection("users").get();
         const usersList = usersSnapshot.docs.map((doc) => {
             var _a;
             const data = doc.data();
-            // Handle cases where createdAt might be missing.
             const createdAt = ((_a = data.createdAt) === null || _a === void 0 ? void 0 : _a.toDate) ? data.createdAt.toDate().toISOString() : new Date(0).toISOString();
+            const displayName = data.displayName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A");
             return {
                 uid: doc.id,
-                displayName: data.displayName || "N/A",
+                displayName: displayName,
                 email: data.email || "N/A",
                 role: data.role || "N/A",
                 createdAt: createdAt,
             };
         });
-        // Manually sort the users by date in descending order, putting users with no date at the top.
         usersList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         return { users: usersList };
     }
@@ -86,7 +84,10 @@ exports.manageUserRole = (0, https_1.onCall)(corsOptions, async (request) => {
         throw new https_1.HttpsError('invalid-argument', 'The function must be called with "uid" and "role" arguments.');
     }
     try {
-        await auth.setCustomUserClaims(uid, { role });
+        // Get permissions for the assigned role from the imported ROLE_PERMISSIONS
+        const permissions = roles_1.ROLE_PERMISSIONS[role] || [];
+        // Set custom claims including both role and permissions
+        await auth.setCustomUserClaims(uid, { role, permissions });
         await firestore.collection('users').doc(uid).update({ role });
         return { success: true, message: `Successfully updated role to ${role} for user ${uid}.` };
     }

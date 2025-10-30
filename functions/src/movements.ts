@@ -1,6 +1,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore } from "firebase-admin/firestore";
+import * as admin from "firebase-admin";
 
 const db = getFirestore();
 
@@ -20,7 +21,11 @@ export const updateMovementStatus = onCall({ cors: true }, async (request) => {
   }
 
   try {
-    await db.collection("asset_movements").doc(movementId).update({ status });
+    const updateData: { status: string, dateOfApproval?: admin.firestore.Timestamp } = { status };
+    if (status === "Approved") {
+      updateData.dateOfApproval = admin.firestore.Timestamp.now();
+    }
+    await db.collection("asset_movements").doc(movementId).update(updateData);
     return { success: true, message: "Movement status updated successfully." };
   } catch (error) {
     console.error("Error updating movement status:", error);

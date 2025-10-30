@@ -1,4 +1,4 @@
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where, writeBatch, getDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where, writeBatch, getDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/firebase";
 import { AssetType } from "@/lib/asset-types";
 import { UserRole, ROLE_PERMISSIONS } from "@/lib/roles";
@@ -87,16 +87,23 @@ export interface AssetMovement {
     reason?: string;
     approver1?: string;
     approver2?: string;
+    dateOfRequest?: Date;
+    dateOfApproval?: Date;
 }
 
 export async function getAssetMovements(): Promise<AssetMovement[]> {
     const querySnapshot = await getDocs(collection(db, "asset_movements"));
-    return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        approver1: doc.data().approver1 || undefined, // Ensure undefined if missing
-        approver2: doc.data().approver2 || undefined, // Ensure undefined if missing
-    } as AssetMovement));
+    return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            approver1: data.approver1 || undefined,
+            approver2: data.approver2 || undefined,
+            dateOfRequest: data.dateOfRequest?.toDate(),
+            dateOfApproval: data.dateOfApproval?.toDate(),
+        } as AssetMovement;
+    });
 }
 
 export async function getAssetMovement(movementId: string): Promise<AssetMovement | null> {
@@ -109,20 +116,31 @@ export async function getAssetMovement(movementId: string): Promise<AssetMovemen
             ...data,
             approver1: data.approver1 || undefined,
             approver2: data.approver2 || undefined,
+            dateOfRequest: data.dateOfRequest?.toDate(),
+            dateOfApproval: data.dateOfApproval?.toDate(),
         } as AssetMovement;
     } else {
         return null;
     }
 }
 
-export async function requestAssetMovement(movementData: Omit<AssetMovement, 'id' | 'status' | 'requestedBy'> & { requestedBy: string, approver1: string, approver2?: string }): Promise<string> {
-    const docRef = await addDoc(collection(db, "asset_movements"), { ...movementData, status: 'Pending' });
+export async function requestAssetMovement(movementData: Omit<AssetMovement, 'id' | 'status' | 'requestedBy' | 'dateOfApproval'> & { requestedBy: string, approver1: string, approver2?: string }): Promise<string> {
+    const docRef = await addDoc(collection(db, "asset_movements"), { ...movementData, status: 'Pending', dateOfRequest: Timestamp.now() });
     return docRef.id;
 }
 
 export async function updateAssetMovementStatus(movementId: string, status: 'Approved' | 'Rejected'): Promise<void> {
     const movementRef = doc(db, "asset_movements", movementId);
-    await updateDoc(movementRef, { status });
+    const updateData: { status: string, dateOfApproval?: Date } = { status };
+    if (status === 'Approved') {
+        updateData.dateOfApproval = new Date();
+    }
+    await updateDoc(movementRef, updateData);
+}
+
+export async function approveAssetMovement(movementId: string): Promise<void> {
+    const movementRef = doc(db, "asset_movements", movementId);
+    await updateDoc(movementRef, { status: 'Approved', dateOfApproval: new Date() });
 }
 
 export async function updateAssetMovement(movementId: string, movementData: Partial<Omit<AssetMovement, 'id'>>): Promise<void> {
@@ -324,7 +342,7 @@ export type NotificationType = 'asset_movement_request' | 'asset_movement_approv
 
 export interface Notification {
   id: string;
-  userId: string; // The ID of the user who should receive the notification
+  userId: string; // The ID of the auser who should receive the notification
   type: NotificationType;
   message: string;
   link?: string; // Optional link to the relevant page

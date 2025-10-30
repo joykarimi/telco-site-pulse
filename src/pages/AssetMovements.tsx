@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/auth/AuthProvider";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -21,8 +22,8 @@ const statusVariant = {
 } as const;
 
 const functions = getFunctions();
-const updateMovementStatus = httpsCallable(functions, 'updateMovementStatus');
 const deleteMovementRequest = httpsCallable(functions, 'deleteMovementRequest');
+const updateMovementStatus = httpsCallable(functions, 'updateMovementStatus');
 
 export default function AssetMovements() {
   const { user, hasPermission } = useAuth();
@@ -34,10 +35,8 @@ export default function AssetMovements() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Corrected canDelete calculation: hasPermission implicitly uses the user's role from AuthContext
   const canDelete = hasPermission(PERMISSIONS.MOVEMENT_DELETE) || user?.role === ROLES.ADMIN;
-
-  const canDownloadMovements = hasPermission(PERMISSIONS.MOVEMENT_APPROVE) || user?.role === ROLES.ADMIN; // Corrected hasPermission call
+  const canDownloadMovements = hasPermission(PERMISSIONS.MOVEMENT_APPROVE) || user?.role === ROLES.ADMIN;
 
   const fetchMovements = async () => {
     try {
@@ -50,13 +49,13 @@ export default function AssetMovements() {
       const approverNamePromises = movementsData.map(async (movement) => {
         if (movement.approver1) uniqueUserIds.add(movement.approver1);
         if (movement.approver2) uniqueUserIds.add(movement.approver2);
-        if (movement.requestedBy) uniqueUserIds.add(movement.requestedBy); // Collect requester IDs
+        if (movement.requestedBy) uniqueUserIds.add(movement.requestedBy);
 
         const approver1Profile = movement.approver1 ? await getUserProfile(movement.approver1) : null;
-        const approver1Name = approver1Profile?.displayName; 
+        const approver1Name = approver1Profile?.displayName;
 
         const approver2Profile = movement.approver2 ? await getUserProfile(movement.approver2) : null;
-        const approver2Name = approver2Profile?.displayName; 
+        const approver2Name = approver2Profile?.displayName;
 
         return { movementId: movement.id, approver1: approver1Name, approver2: approver2Name };
       });
@@ -85,7 +84,6 @@ export default function AssetMovements() {
 
       setAssetSerialNumbers(newAssetSerialNumbers);
 
-      // Fetch and set requester names
       const fetchedRequesterNames: Record<string, string> = {};
       await Promise.all(Array.from(uniqueUserIds).map(async (uid) => {
         const userProfile = await getUserProfile(uid);
@@ -139,14 +137,9 @@ export default function AssetMovements() {
   const handleUpdateStatus = async (movement: AssetMovement, status: 'Approved' | 'Rejected') => {
     if (!user) return;
 
-    if (movement.approver1 !== user.uid && movement.approver2 !== user.uid) {
-        alert("You are not authorized to approve or reject this request.");
-        return;
-    }
-
     try {
-        await updateMovementStatus({ movementId: movement.id, status });
-        fetchMovements();
+      await updateMovementStatus({ movementId: movement.id, status });
+      fetchMovements();
 
       const asset = await getAsset(movement.assetId);
       addNotification({
@@ -197,6 +190,8 @@ export default function AssetMovements() {
       'Approver 1': approverNames[move.id]?.approver1 || 'N/A',
       'Approver 2': approverNames[move.id]?.approver2 || 'N/A',
       'Status': move.status || 'Unknown Status',
+      'Date of Request': move.dateOfRequest instanceof Date && !isNaN(move.dateOfRequest.getTime()) ? move.dateOfRequest.toLocaleDateString() : 'N/A',
+      'Date of Approval': move.dateOfApproval ? move.dateOfApproval.toLocaleDateString() : 'N/A',
     }));
 
     const worksheet = utils.json_to_sheet(dataForExcel);
@@ -238,6 +233,8 @@ export default function AssetMovements() {
                   <TableHead>Requester</TableHead>
                   <TableHead>Approver 1</TableHead>
                   <TableHead>Approver 2</TableHead>
+                  <TableHead>Date of Request</TableHead>
+                  <TableHead>Date of Approval</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -253,6 +250,8 @@ export default function AssetMovements() {
                       <TableCell>{requesterNames[move.requestedBy] || 'N/A'}</TableCell>
                       <TableCell>{approverNames[move.id]?.approver1 || 'N/A'}</TableCell>
                       <TableCell>{approverNames[move.id]?.approver2 || 'N/A'}</TableCell>
+                      <TableCell>{move.dateOfRequest instanceof Date && !isNaN(move.dateOfRequest.getTime()) ? move.dateOfRequest.toLocaleDateString() : 'N/A'}</TableCell>
+                      <TableCell>{move.dateOfApproval ? move.dateOfApproval.toLocaleDateString() : 'N/A'}</TableCell>
                       <TableCell>
                         <Badge variant={statusVariant[move.status] || 'default'}>
                           {move.status || 'Unknown Status'}
@@ -296,7 +295,7 @@ export default function AssetMovements() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center">No asset movement requests found.</TableCell>
+                    <TableCell colSpan={11} className="text-center">No asset movement requests found.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
