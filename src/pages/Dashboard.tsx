@@ -167,11 +167,11 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent className="pl-2">
                         <ResponsiveContainer width="100%" height={350}>
-                            <BarChart data={tenantData} margin={{ top: 20, right: 20, left: 20, bottom: 5 }}> 
+                            <BarChart data={tenantData} margin={{ top: 20, right: 20, left: 20, bottom: 30 }}> 
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.3} /> 
-                                <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                                <XAxis dataKey="name" tickLine={false} axisLine={false} label={{ value: 'Tenants', position: 'insideBottom', dy: 20, fontSize: 14 }} tick={{ fontSize: 12 }} />
                                 <YAxis 
-                                    label={{ value: 'Earnings (KES)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: '14px' } }} 
+                                    label={{ value: 'Earnings', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: '14px' } }} 
                                     tickFormatter={formatLargeCurrency} 
                                     axisLine={false} 
                                     tickLine={false} 
@@ -179,7 +179,7 @@ export default function Dashboard() {
                                     tick={{ fill: 'hsl(var(--foreground))', fontSize: '12px' }} 
                                 />
                                 <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                                <Legend />
+                                
                                 <Bar dataKey="earnings" radius={[4, 4, 0, 0]} animationBegin={0} animationDuration={800} barSize={60} stroke="hsl(var(--card-foreground))" strokeWidth={1} onClick={handleBarClick}>
                                     {tenantData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.color} />
