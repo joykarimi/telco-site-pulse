@@ -50,23 +50,24 @@ interface CollapsibleNavItemProps extends NavItemProps {
 }
 
 const navItems: (NavItemProps | (NavItemProps & { submenu: NavItemProps[] }))[] = [
-  { href: "/", icon: Home, label: "Dashboard" },
-  { href: "/assets", icon: Layers, label: "Assets", permission: PERMISSIONS.ASSET_READ },
-  { href: "/sites", icon: Building2, label: "Sites", permission: PERMISSIONS.SITE_READ },
-  { href: "/revenue-breakdown", icon: PieChart, label: "Revenue Breakdown" },
-  { href: "/site-profitability", icon: PieChart, label: "Site Profitability" },
-  { href: "/asset-movement-requests", icon: Move, label: "Asset Movements", permission: PERMISSIONS.MOVEMENT_READ },
-  {
-    href: "/admin",
-    icon: Users,
-    label: "User Management",
-    permission: PERMISSIONS.USER_MANAGEMENT_READ,
-    submenu: [
-      { href: "/admin/roles", icon: Users, label: "Roles" },
-      { href: "/admin/create-user", icon: Users, label: "Create User", permission: PERMISSIONS.USER_MANAGEMENT_CREATE },
-    ],
-  },
-];
+    { href: "/", icon: Home, label: "Dashboard" },
+    { href: "/revenue-breakdown", icon: PieChart, label: "Revenue Breakdown" },
+    { href: "/sites", icon: Building2, label: "Sites", permission: PERMISSIONS.SITE_READ },
+    { href: "/site-profitability", icon: PieChart, label: "Site Profitability" },
+    { href: "/assets", icon: Layers, label: "Assets", permission: PERMISSIONS.ASSET_READ },
+    { href: "/asset-movement-requests", icon: Move, label: "Asset Movements", permission: PERMISSIONS.MOVEMENT_READ },
+    {
+      href: "/admin",
+      icon: Users,
+      label: "User Management",
+      permission: PERMISSIONS.USER_MANAGEMENT_READ,
+      submenu: [
+        { href: "/admin/roles", icon: Users, label: "Roles" },
+        { href: "/admin/create-user", icon: Users, label: "Create User", permission: PERMISSIONS.USER_MANAGEMENT_CREATE },
+      ],
+    },
+  ];
+  
 
 const getInitials = (name?: string | null) => {
     if (!name) return '';
